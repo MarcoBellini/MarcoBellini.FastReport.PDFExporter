@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.13.35931.197 d17.13
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FastReport.Export.PdfSharpExport", "FastReport.Export.PdfSharpExport\FastReport.Export.PdfSharpExport.csproj", "{D2B77A87-5973-4DF9-B399-35C02EDA4A25}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{D2B77A87-5973-4DF9-B399-35C02EDA4A25}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D2B77A87-5973-4DF9-B399-35C02EDA4A25}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D2B77A87-5973-4DF9-B399-35C02EDA4A25}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D2B77A87-5973-4DF9-B399-35C02EDA4A25}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {3FBFE0B1-62F4-4A41-B1D6-D910FA40B709}
+	EndGlobalSection
+EndGlobal
