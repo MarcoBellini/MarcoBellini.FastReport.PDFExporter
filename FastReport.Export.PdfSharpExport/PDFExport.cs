@@ -3,14 +3,14 @@ using PdfSharp.Drawing;
 using FastReport.Utils;
 using System.Drawing;
 
-namespace FastReport.Export.PDFSharpExport;
+namespace FastReport.Export.PdfExporter;
 
 public partial class PDFExport : ExportBase
 {
     
     private PdfDocument? _Document;
     private PdfPage? _Page;
-    private PDFGraphicsBinding? _Bind;  
+    private PDFGraphicsAdapter? _Bind;  
 
     public PDFExport()
     { 
@@ -60,7 +60,7 @@ public partial class PDFExport : ExportBase
         var LeftMargin = PdfUtils.MmToPixel(page.LeftMargin);
         var TopMargin =  PdfUtils.MmToPixel(page.TopMargin);
 
-        _Bind = new PDFGraphicsBinding(XGraphics.FromPdfPage(_Page), new XSize(LeftMargin, TopMargin));
+        _Bind = new PDFGraphicsAdapter(XGraphics.FromPdfPage(_Page), new XSize(LeftMargin, TopMargin));
 
         // Draw the page background
         using (TextObject _PageFill = new TextObject())

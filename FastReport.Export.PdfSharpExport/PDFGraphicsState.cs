@@ -1,6 +1,6 @@
 ﻿using PdfSharp.Drawing;
 
-namespace FastReport.Export.PDFSharpExport;
+namespace FastReport.Export.PdfExporter;
 
 /// <summary>
 /// Class used to store PDFSharp graphics state.
@@ -8,7 +8,7 @@ namespace FastReport.Export.PDFSharpExport;
 internal class PdfGraphicsState : IGraphicsState
 {
 
-    private XGraphicsState _XGraphicsState;
+    private XGraphicsState state;
 
     /// <summary>
     /// Create new PDFGraphicsState
@@ -16,13 +16,13 @@ internal class PdfGraphicsState : IGraphicsState
     /// <param name="state">PDFSharp state returned from <c>save()</c></param>
     public PdfGraphicsState(XGraphicsState state)
     {
-        _XGraphicsState = state;    
+        this.state = state;    
     }
 
     /// <summary>
     /// Get Saved state
     /// </summary>
-    public XGraphicsState GetState { get => _XGraphicsState; }
+    public XGraphicsState GetState { get => state; }
 
 
 }

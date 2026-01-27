@@ -5,25 +5,30 @@ using System.Drawing.Drawing2D;
 using PdfSharp.Drawing.Layout;
 
 
-namespace FastReport.Export.PDFSharpExport;
+namespace FastReport.Export.PdfExporter;
 
-internal class PdfUtils
-{
+
+internal static class PdfUtils
+{    
+
+    public const double PointsPerPixel = 0.75;
+    public const double PointsPerInch = 72.0;
+    public const double MillimetersPerInch = 25.4;
+
+
     public static double MmToPoints(double mm)
     {
-        
-        return (mm * 72.0) / 25.4;
+        return (mm * PointsPerInch) / MillimetersPerInch;
+    }
+
+    public static double PointsToMm(double points)
+    {
+        return (points * MillimetersPerInch) / PointsPerInch;
     }
 
     public static double PixelToMm(double pixels)
-    {
+    {     
         return pixels / Units.Millimeters;
-    }
-
-    public static double PixelToPoints(double pixels)
-    {
-       
-        return MmToPoints(PixelToMm(pixels));
     }
 
     public static double MmToPixel(double mm)
@@ -31,24 +36,25 @@ internal class PdfUtils
         return mm * Units.Millimeters;
     }
 
-    public static double PointsToMm(double points)
+    public static double PixelToPoints(double pixels)
     {
-        return (points * 25.4) / 72.0;
+        return pixels * PointsPerPixel;
     }
 
     public static double PointsToPixel(double points)
     {
-        return MmToPixel(PointsToMm(points));
+        return points / PointsPerPixel;
     }
 
     public static XMatrix XMatrixFromGdiMatrix(System.Drawing.Drawing2D.Matrix m)
     {
         var xm = new XMatrix();
-
+        
         xm.M11 = m.MatrixElements.M11;
         xm.M12 = m.MatrixElements.M12;
         xm.M21 = m.MatrixElements.M21;
         xm.M22 = m.MatrixElements.M22;
+
 
         xm.OffsetX = PixelToPoints(m.OffsetX);
         xm.OffsetY = PixelToPoints(m.OffsetY);
@@ -143,258 +149,202 @@ internal class PdfUtils
         return XColor.FromArgb(color.ToArgb()); 
     }
 
-    public static XPen XPenFromGdiPen(Pen pen)
+    public static XPen XPenFromGdiPen(Pen gdiPen)
     {
-        XPen p = new XPen(XColorFromGdiColor(pen.Color), PixelToPoints(pen.Width));            
+        XPen pen = new(XColorFromGdiColor(gdiPen.Color), PixelToPoints(gdiPen.Width));
 
-        switch (pen.DashStyle)
-        {
-            case DashStyle.Solid:
-                p.DashStyle = XDashStyle.Solid;
-                break;
-            case DashStyle.Dash:
-                p.DashStyle = XDashStyle.Dash;
-                break;
-            case DashStyle.Dot:
-                p.DashStyle = XDashStyle.Dot;
-                break;
-            case DashStyle.DashDot:
-                p.DashStyle = XDashStyle.DashDot;
-                break;
-            case DashStyle.DashDotDot:
-                p.DashStyle = XDashStyle.DashDotDot;
-                break;
-            case DashStyle.Custom:
-                p.DashStyle = XDashStyle.Custom;
-                break;
-            default:
-                p.DashStyle = XDashStyle.Solid;
-                break;
-        }
-       
-        // Add support for custom dash pattern
-        if ((pen.DashStyle == DashStyle.Custom) && (pen.DashPattern.Length > 0))
-        {
-            p.DashOffset = Convert.ToDouble(pen.DashOffset);
-            p.DashPattern = Array.ConvertAll(pen.DashPattern, c => (double)c);
-        }               
+        ApplyDashStyleFromGdiPen(gdiPen, pen);
 
-        // Add support for LineJoin
-        switch (pen.LineJoin)
-        {
-            case LineJoin.Bevel:
-                p.LineJoin = XLineJoin.Bevel;
-                break;
-            case LineJoin.Miter:
-                p.LineJoin = XLineJoin.Miter;
-                break;
-            case LineJoin.Round:
-                p.LineJoin = XLineJoin.Round;
-                break;
-            default:
-                p.LineJoin = XLineJoin.Miter;
-                break;
-        }
+        ApplyLineJoinFromGdiPen(gdiPen, pen);
 
-        p.MiterLimit = PixelToPoints(pen.MiterLimit);
+        ApplyMiterLimitFromGdiPen(gdiPen, pen);
 
-        // TODO: Support line cap (PDFSharp support only left+right cap)
-  
-        return p;
+        ApplyLineCapFromGdiPen(gdiPen, pen);
+
+        return pen;
     }
 
+    private static void ApplyDashStyleFromGdiPen(Pen gdiPen, XPen pen)
+    {
+        switch (gdiPen.DashStyle)
+        {
+            case DashStyle.Solid:
+                pen.DashStyle = XDashStyle.Solid;
+                break;
+            case DashStyle.Dash:
+                pen.DashStyle = XDashStyle.Dash;
+                break;
+            case DashStyle.Dot:
+                pen.DashStyle = XDashStyle.Dot;
+                break;
+            case DashStyle.DashDot:
+                pen.DashStyle = XDashStyle.DashDot;
+                break;
+            case DashStyle.DashDotDot:
+                pen.DashStyle = XDashStyle.DashDotDot;
+                break;
+            case DashStyle.Custom:
+                pen.DashStyle = XDashStyle.Custom;
+
+                if (gdiPen.DashPattern.Length > 0)
+                    ApplyCustomDashStyle(gdiPen, pen);
+
+                break;
+            default:
+                pen.DashStyle = XDashStyle.Solid;
+                break;
+        }
+    }
+
+    private static void ApplyCustomDashStyle(Pen gdiPen, XPen pen)
+    {
+        pen.DashOffset = Convert.ToDouble(gdiPen.DashOffset);
+        pen.DashPattern = Array.ConvertAll(gdiPen.DashPattern, c => (double)c);
+    }
+
+    private static void ApplyLineJoinFromGdiPen(Pen gdiPen, XPen pen)
+    {
+        switch (gdiPen.LineJoin)
+        {
+            case LineJoin.Bevel:
+                pen.LineJoin = XLineJoin.Bevel;
+                break;
+            case LineJoin.Miter:
+                pen.LineJoin = XLineJoin.Miter;
+                break;
+            case LineJoin.Round:
+                pen.LineJoin = XLineJoin.Round;
+                break;
+            default:
+                pen.LineJoin = XLineJoin.Miter;
+                break;
+        }
+    }
+
+    private static void ApplyMiterLimitFromGdiPen(Pen gdiPen, XPen pen)
+    {
+        pen.MiterLimit = PixelToPoints(gdiPen.MiterLimit);
+    }
 
     public static XBrush XBrushFromGdiBrush(Brush brush)
     {
-        XBrush _XBrush;
- 
-        switch(brush)
+        PDFBrushFactory BrushFactory = new PDFBrushFactoryImpl();
+
+        return BrushFactory.CreateBrush(brush);
+    }
+
+    private static void ApplyLineCapFromGdiPen(Pen gdiPen, XPen pen)
+    {
+        if (gdiPen.StartCap != gdiPen.EndCap)
+            throw new NotSupportedException("Different start and end line caps are not supported.");
+
+        if (gdiPen.StartCap == LineCap.Triangle)
+            throw new NotSupportedException("Triangle line cap is not supported.");
+
+        switch (gdiPen.StartCap)
         {
-            case SolidBrush:
-                var _SolidBrush = (SolidBrush) brush;
-
-                _XBrush = new XSolidBrush(XColorFromGdiColor(_SolidBrush.Color));
-
+            case LineCap.Flat:
+                pen.LineCap = XLineCap.Flat;
                 break;
-            case LinearGradientBrush:
-                var _GradientBrush = (LinearGradientBrush)brush;
-
-                var p1 = new XPoint(PixelToPoints(_GradientBrush.Rectangle.Left), 
-                                    PixelToPoints(_GradientBrush.Rectangle.Top));
-
-                var p2 = new XPoint(PixelToPoints(_GradientBrush.Rectangle.Right),
-                                    PixelToPoints(_GradientBrush.Rectangle.Bottom));
-
-                var colors = _GradientBrush.LinearColors;
-
-                var c1 = XColorFromGdiColor(colors.First());
-                var c2 = XColorFromGdiColor(colors.Last());
-
-                var _XGradientBrush = new XLinearGradientBrush(p1, p2, c1, c2);
-
-                var TrasfromMatrix = XMatrixFromGdiMatrix(_GradientBrush.Transform);
-
-                _XGradientBrush.Transform = TrasfromMatrix;
-                _XBrush = _XGradientBrush;
-
+            case LineCap.Square:
+                pen.LineCap = XLineCap.Square;
+                break;
+            case LineCap.Round:
+                pen.LineCap = XLineCap.Round;
                 break;
             default:
-                // If brush is not supported, use a black solid brush
-                _XBrush = new XSolidBrush(XColors.Black);
+                pen.LineCap = XLineCap.Flat;
                 break;
-            
         }
-
-        return _XBrush;
     }
 
     public static XFont XFontFromGdiFont(Font font)
     {           
-        XFontStyleEx Style = XFontStyleEx.Regular;
+        XFontStyleEx style = XFontStyleEx.Regular;
 
         if (font.Bold)
-            Style |= XFontStyleEx.Bold;
+            style |= XFontStyleEx.Bold;
 
         if (font.Italic)
-            Style |= XFontStyleEx.Italic;
+            style |= XFontStyleEx.Italic;
 
         if (font.Underline)
-            Style |= XFontStyleEx.Underline;
+            style |= XFontStyleEx.Underline;
 
         if (font.Underline)
-            Style |= XFontStyleEx.Strikeout;
+            style |= XFontStyleEx.Strikeout;
 
-        return new XFont(font.Name, font.Size, Style);
+        return new XFont(font.Name, font.Size, style);
     }
 
     public static XStringFormat XStringFormatFromGdiFormat(StringFormat format)
     {
-        XStringFormat _XStringFormat = new XStringFormat();            
+        XStringFormat pdfFormat = new()
+        {
+            Alignment = GetStringAlignment(format),
+            LineAlignment = GetLineAlignment(format)
+        };
 
-        // If word wrap is not needed align text on user settings
-        _XStringFormat.Alignment = XStringAlignment.Near;
-        if (format.Alignment == StringAlignment.Center)
-            _XStringFormat.Alignment = XStringAlignment.Center;
-        else if (format.Alignment == StringAlignment.Far)
-            _XStringFormat.Alignment = XStringAlignment.Far;
+        return pdfFormat;
+    }
 
-        _XStringFormat.LineAlignment = XLineAlignment.Near;
-        if (format.LineAlignment == StringAlignment.Center)
-            _XStringFormat.LineAlignment = XLineAlignment.Center;
-        else if (format.LineAlignment == StringAlignment.Far)
-            _XStringFormat.LineAlignment = XLineAlignment.Far;
+    private static XStringAlignment GetStringAlignment(StringFormat format)
+    {
+        return format.Alignment switch
+        {
+            StringAlignment.Near => XStringAlignment.Near,
+            StringAlignment.Center =>  XStringAlignment.Center,
+            StringAlignment.Far => XStringAlignment.Far,
+            _ => XStringAlignment.Near,
+        };   
+    }
 
-        return _XStringFormat;
+    private static XLineAlignment GetLineAlignment(StringFormat format)
+    {
+        return format.LineAlignment switch
+        {
+            StringAlignment.Near => XLineAlignment.Near,
+            StringAlignment.Center => XLineAlignment.Center,
+            StringAlignment.Far => XLineAlignment.Far,
+            _ => XLineAlignment.Near,
+        };
     }
 
     public static XParagraphAlignment GetParagraphAlignment(StringFormat format)
     {
-        XParagraphAlignment Alignment;
-
-
-        switch (format.Alignment)
+        return format.Alignment switch
         {
-            case StringAlignment.Near:
-                Alignment = XParagraphAlignment.Left;
-                break;
-            case StringAlignment.Center:
-                Alignment = XParagraphAlignment.Center;
-                break;
-            case StringAlignment.Far:
-                Alignment = XParagraphAlignment.Right;
-                break;
-            default:
-                Alignment = XParagraphAlignment.Default;
-                break;
-        }          
-
-        return Alignment;
+            StringAlignment.Near => XParagraphAlignment.Left,
+            StringAlignment.Center => XParagraphAlignment.Center,
+            StringAlignment.Far => XParagraphAlignment.Right,
+            _ => XParagraphAlignment.Default
+        };
     }
 
-    public static XGraphicsUnit? XGraphicsUnitFromGdiUnit(GraphicsUnit unit)
+    public static XGraphicsUnit GetXGraphicsUnitFromGdiUnit(GraphicsUnit unit)
     {
-        XGraphicsUnit? _XGraphicsUnit;
-
-        switch (unit)
+        return unit switch
         {
-            case GraphicsUnit.Point:
-                _XGraphicsUnit = XGraphicsUnit.Point;
-                break;
-            case GraphicsUnit.Inch:
-                _XGraphicsUnit = XGraphicsUnit.Inch;
-                break;             
-            case GraphicsUnit.Millimeter:
-                _XGraphicsUnit = XGraphicsUnit.Millimeter;
-                break;
-            default:
-                _XGraphicsUnit = null;
-                break;
-        }
-
-        return _XGraphicsUnit;
+            GraphicsUnit.Point => XGraphicsUnit.Point,
+            GraphicsUnit.Inch => XGraphicsUnit.Inch,
+            GraphicsUnit.Millimeter => XGraphicsUnit.Millimeter,
+            _ => throw new System.NotSupportedException($"GraphicsUnit '{unit}' not supported.")
+        };
     }
 
-    private static bool IsClosed(byte pathType)
+    private static XFillMode GetXFillModeFromGdi(FillMode fill)
     {
-        return (pathType & (byte)PathPointType.CloseSubpath) != 0;
+        return fill switch
+        {
+            FillMode.Alternate => XFillMode.Alternate,
+            FillMode.Winding => XFillMode.Winding,       
+            _ => XFillMode.Alternate
+        };
     }
 
     public static XGraphicsPath XGraphicsPathFromGdiPath(GraphicsPath gdiPath)
     {
-        var xPath = new XGraphicsPath();
-        var points = gdiPath.PathPoints;
-        var types = gdiPath.PathTypes;
-
-        int i = 0;
-        while (i < points.Length)
-        {           
-            byte pointType = (byte)(types[i] & (int)PathPointType.PathTypeMask);
-
-            // Start a new figure if needed
-            if (pointType == (byte)PathPointType.Start)
-            {
-                xPath.StartFigure();
-                i++;
-                continue;
-            }
-
-            // Line segment
-            if (pointType == (byte)PathPointType.Line)
-            {
-                var p1 = XPointFromGdiPoint(points[i - 1]);
-                var p2 = XPointFromGdiPoint(points[i]);
-                xPath.AddLine(p1, p2);
-                if (IsClosed(types[i]))
-                    xPath.CloseFigure();
-
-                i++;
-                continue;
-            }
-
-            // Bezier segment (3 points define 1 Bézier)
-            if (pointType == (byte)PathPointType.Bezier)
-            {
-                if (i >= 3)
-                {
-                    var p0 = XPointFromGdiPoint(points[i - 3]);
-                    var p1 = XPointFromGdiPoint(points[i - 2]);
-                    var p2 = XPointFromGdiPoint(points[i - 1]);
-                    var p3 = XPointFromGdiPoint(points[i]);
-                    xPath.AddBezier(p0, p1, p2, p3);
-                }
-
-                if (IsClosed(types[i]))
-                    xPath.CloseFigure();
-
-                i++;
-                continue;
-            }
-
-            // Unknown segment type: skip safely
-            i++;
-        }
-
-        return xPath;
+        return new XGraphicsPath(gdiPath.PathPoints, gdiPath.PathTypes, GetXFillModeFromGdi(gdiPath.FillMode));
     }
 
 }

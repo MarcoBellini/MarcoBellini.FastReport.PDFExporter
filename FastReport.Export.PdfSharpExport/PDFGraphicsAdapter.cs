@@ -8,9 +8,9 @@ using System.Drawing.Text;
 using System.Text;
 
 
-namespace FastReport.Export.PDFSharpExport;
+namespace FastReport.Export.PdfExporter;
 
-internal class PDFGraphicsBinding : IGraphics
+internal class PDFGraphicsAdapter : IGraphics
 {
     private const char Whitespace = ' ';
 
@@ -99,7 +99,7 @@ internal class PDFGraphicsBinding : IGraphics
     }
 
 
-    public PDFGraphicsBinding(XGraphics g, XSize Margins)
+    public PDFGraphicsAdapter(XGraphics g, XSize Margins)
     {
         pdfGfx = g;
 
@@ -170,12 +170,9 @@ internal class PDFGraphicsBinding : IGraphics
         var img = XImage.FromGdiPlusImage(image);
         var source = PdfUtils.XRectFromGdiRect(src);
         var dest = PdfUtils.XRectFromGdiRect(dst);
-        var unit = PdfUtils.XGraphicsUnitFromGdiUnit(srcUnit);
+        var unit = PdfUtils.GetXGraphicsUnitFromGdiUnit(srcUnit);
 
-        if (unit == null)
-            throw new ArgumentException("GraphicsUnit not supported", nameof(srcUnit));
-
-        pdfGfx.DrawImage(img, dest, source, unit.Value);           
+        pdfGfx.DrawImage(img, dest, source, unit);           
     }
 
     public void DrawImage(System.Drawing.Image image, RectangleF rect)
@@ -211,10 +208,8 @@ internal class PDFGraphicsBinding : IGraphics
     {
         var img = XImage.FromGdiPlusImage(image);
         var dest = PdfUtils.XRectFromGdiRect(destRect);
-        var unit = PdfUtils.XGraphicsUnitFromGdiUnit(srcUnit);
+        var unit = PdfUtils.GetXGraphicsUnitFromGdiUnit(srcUnit);
 
-        if (unit == null)
-            throw new ArgumentException("GraphicsUnit not supported", nameof(srcUnit));
 
         var x = PdfUtils.PixelToPoints(srcX);
         var y = PdfUtils.PixelToPoints(srcY);
@@ -223,7 +218,7 @@ internal class PDFGraphicsBinding : IGraphics
 
         var source = new XRect(x, y, w, h);
 
-        pdfGfx.DrawImage(img, dest, source, unit.Value);          
+        pdfGfx.DrawImage(img, dest, source, unit);          
     }
 
     public void DrawImageUnscaled(System.Drawing.Image image, Rectangle rect)
