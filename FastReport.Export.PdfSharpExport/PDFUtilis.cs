@@ -48,52 +48,54 @@ internal static class PdfUtils
 
     public static XMatrix XMatrixFromGdiMatrix(System.Drawing.Drawing2D.Matrix m)
     {
-        var xm = new XMatrix();
+        var xm = new XMatrix();       
+
+        if (m.IsIdentity)
+            xm.SetIdentity(); 
         
         xm.M11 = m.MatrixElements.M11;
         xm.M12 = m.MatrixElements.M12;
         xm.M21 = m.MatrixElements.M21;
         xm.M22 = m.MatrixElements.M22;
-
-
+        
         xm.OffsetX = PixelToPoints(m.OffsetX);
-        xm.OffsetY = PixelToPoints(m.OffsetY);
+        xm.OffsetY = PixelToPoints(m.OffsetY);      
 
         return xm;
     }
 
     public static XRect XRectFromGdiRect(Rectangle rect)
     {
-        double x = PixelToPoints(rect.X);
-        double y = PixelToPoints(rect.Y);
-        double width = PixelToPoints(rect.Width);
-        double height = PixelToPoints(rect.Height);
+        var x = PixelToPoints(rect.X);
+        var y = PixelToPoints(rect.Y);
+        var width = PixelToPoints(rect.Width);
+        var height = PixelToPoints(rect.Height);
 
         return new XRect(x, y, width, height);
     }
 
     public static XRect XRectFromGdiRect(RectangleF rect)
     {
-        double x = PixelToPoints(rect.X);
-        double y = PixelToPoints(rect.Y);
-        double width = PixelToPoints(rect.Width);
-        double height = PixelToPoints(rect.Height);
+        var x = PixelToPoints(rect.X);
+        var y = PixelToPoints(rect.Y);
+        var width = PixelToPoints(rect.Width);
+        var height = PixelToPoints(rect.Height);
 
         return new XRect(x, y, width, height);
     }
 
     public static XPoint XPointFromGdiPoint(Point point)
     {
-        double x = PixelToPoints(point.X);
-        double y = PixelToPoints(point.Y);
+        var x = PixelToPoints(point.X);
+        var y = PixelToPoints(point.Y);
 
         return new XPoint(x, y);
     }
 
     public static XPoint XPointFromGdiPoint(PointF point)
     {
-        double x = PixelToPoints(point.X);
-        double y = PixelToPoints(point.Y);
+        var x = PixelToPoints(point.X);
+        var y = PixelToPoints(point.Y);
 
         return new XPoint(x, y);
     }
@@ -113,7 +115,7 @@ internal static class PdfUtils
         return xPoints;
     }
 
-    public static XPoint[] XPointArrayFromGdiPoint(PointF[] points)
+    public static XPoint[] XPointArrayFromGdiPointF(PointF[] points)
     {
         if (points.Length == 0)
             return Array.Empty<XPoint>();
@@ -130,18 +132,18 @@ internal static class PdfUtils
 
     public static XSize XSizeFromGdiSize(Size size)
     {
-        var w = PixelToPoints(size.Width);
-        var h = PixelToPoints(size.Height);
+        var width = PixelToPoints(size.Width);
+        var height = PixelToPoints(size.Height);
 
-        return new XSize(w, h);
+        return new XSize(width, height);
     }
 
-    public static XSize XSizeFromGdiSize(SizeF size)
+    public static XSize XSizeFromGdiSizeF(SizeF size)
     {
-        var w = PixelToPoints(size.Width);
-        var h = PixelToPoints(size.Height);
+        var width = PixelToPoints(size.Width);
+        var height = PixelToPoints(size.Height);
 
-        return new XSize(w, h);
+        return new XSize(width, height);
     }
 
     public static XColor XColorFromGdiColor(Color color)
@@ -230,7 +232,7 @@ internal static class PdfUtils
     {
         PDFBrushFactory BrushFactory = new PDFBrushFactoryImpl();
 
-        return BrushFactory.CreateBrush(brush);
+        return BrushFactory.CreateXBrush(brush);
     }
 
     private static void ApplyLineCapFromGdiPen(Pen gdiPen, XPen pen)
@@ -321,7 +323,7 @@ internal static class PdfUtils
         };
     }
 
-    public static XGraphicsUnit GetXGraphicsUnitFromGdiUnit(GraphicsUnit unit)
+    public static XGraphicsUnit GetXGraphicsUnitFromGdi(GraphicsUnit unit)
     {
         return unit switch
         {
@@ -344,7 +346,15 @@ internal static class PdfUtils
 
     public static XGraphicsPath XGraphicsPathFromGdiPath(GraphicsPath gdiPath)
     {
-        return new XGraphicsPath(gdiPath.PathPoints, gdiPath.PathTypes, GetXFillModeFromGdi(gdiPath.FillMode));
+        var points = gdiPath.PathPoints;
+
+        for (int i = 0; i < points.Length; i++)
+        {
+            points[i].X = Convert.ToSingle(PixelToPoints(points[i].X));
+            points[i].Y = Convert.ToSingle(PixelToPoints(points[i].Y));
+        }
+
+        return new XGraphicsPath(points, gdiPath.PathTypes, GetXFillModeFromGdi(gdiPath.FillMode));
     }
 
 }

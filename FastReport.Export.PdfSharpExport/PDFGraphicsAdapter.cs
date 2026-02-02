@@ -7,7 +7,6 @@ using System.Drawing.Imaging;
 using System.Drawing.Text;
 using System.Text;
 
-
 namespace FastReport.Export.PdfExporter;
 
 internal class PDFGraphicsAdapter : IGraphics
@@ -18,22 +17,41 @@ internal class PDFGraphicsAdapter : IGraphics
     private Graphics gdiGfx;
     private Bitmap gdiBitmap;
 
-    private bool isGdiBitmapDrawn = false; 
+    private bool DrawGdiBitmapOnDispose = false; 
 
-    public Graphics Graphics => gdiGfx;     
+    public Graphics Graphics => gdiGfx;   
     public float DpiX => 96.0f;
     public float DpiY => 96.0f;
-    public bool IsClipEmpty => true;
+    public bool IsClipEmpty => true;         
     public TextRenderingHint TextRenderingHint { get; set; } = TextRenderingHint.SystemDefault;
     public InterpolationMode InterpolationMode { get; set; } = InterpolationMode.Default;
 
-    public System.Drawing.Drawing2D.Matrix Transform { get; set; } = new System.Drawing.Drawing2D.Matrix();
+    public System.Drawing.Drawing2D.Matrix Transform 
+    {
+        get
+        {          
+            var m = pdfGfx.Transform;
+            var xmatrix = new System.Drawing.Drawing2D.Matrix(
+                (float)m.M11, 
+                (float)m.M12, 
+                (float)m.M21, 
+                (float)m.M21, 
+                (float)PdfUtils.PointsToPixel(m.OffsetX), 
+                (float)PdfUtils.PointsToPixel(m.OffsetY));
+
+            return xmatrix;  
+        }
+        set
+        {
+            throw new NotSupportedException("Cannot Set Trasformation Matrix");
+        }
+    }
 
 
     public GraphicsUnit PageUnit
     {
         get
-        {           
+        {
             return GraphicsUnit.Pixel;
         }
         set
@@ -44,7 +62,17 @@ internal class PDFGraphicsAdapter : IGraphics
         }
     }
 
-    public Region Clip { get; set; } = new Region();
+    public Region Clip 
+    {
+        get 
+        {
+            throw new NotSupportedException("Cannot Set/Get Clip Region");
+        }
+        set
+        {
+            throw new NotSupportedException("Cannot Set/Get Clip Region");
+        }
+    } 
 
     public CompositingQuality CompositingQuality { get; set; } = CompositingQuality.Default;
 
@@ -99,26 +127,25 @@ internal class PDFGraphicsAdapter : IGraphics
     }
 
 
-    public PDFGraphicsAdapter(XGraphics g, XSize Margins)
+    public PDFGraphicsAdapter(XGraphics xgraphics, XSize PageMargins)
     {
-        pdfGfx = g;
+        pdfGfx = xgraphics;
 
         // Reduce size of the page subtracting margins
-        var Width = pdfGfx.PageSize.Width - Margins.Width;
-        var Height = pdfGfx.PageSize.Height - Margins.Height;            
+        var Width = pdfGfx.PageSize.Width - PageMargins.Width;
+        var Height = pdfGfx.PageSize.Height - PageMargins.Height;            
 
         Width = PdfUtils.PointsToPixel(Width);
         Height = PdfUtils.PointsToPixel(Height);
 
         gdiBitmap = new Bitmap((int)Width, (int)Height);
-
         gdiGfx = Graphics.FromImage(gdiBitmap);
     }
 
     public void Dispose()
     {
         // Draw Bitmap drawn using GDI+
-        if(isGdiBitmapDrawn)
+        if(DrawGdiBitmapOnDispose)
             DrawImage(gdiBitmap, 0, 0, gdiBitmap.Width, gdiBitmap.Height);
 
         gdiGfx.Dispose();
@@ -126,7 +153,7 @@ internal class PDFGraphicsAdapter : IGraphics
     }
 
     public void DrawArc(Pen pen, float x, float y, float width, float height, float startAngle, float sweepAngle)
-    {
+    {   
         pdfGfx.DrawArc(PdfUtils.XPenFromGdiPen(pen),
             PdfUtils.PixelToPoints(x),
             PdfUtils.PixelToPoints(y),
@@ -136,9 +163,9 @@ internal class PDFGraphicsAdapter : IGraphics
     }
 
     public void DrawCurve(Pen pen, PointF[] points, int offset, int numberOfSegments, float tension)
-    {
+    {        
         pdfGfx.DrawCurve(PdfUtils.XPenFromGdiPen(pen),
-            PdfUtils.XPointArrayFromGdiPoint(points),
+            PdfUtils.XPointArrayFromGdiPointF(points),
             offset, numberOfSegments, tension);
     }
 
@@ -152,36 +179,35 @@ internal class PDFGraphicsAdapter : IGraphics
     }
 
     public void DrawEllipse(Pen pen, RectangleF rect)
-    {
+    {       
         DrawEllipse(pen, rect.X, rect.Y, rect.Width, rect.Height);
     }
 
     public void DrawImage(System.Drawing.Image image, float x, float y)
-    {
+    {       
         var img = XImage.FromGdiPlusImage(image);
-        var _x = PdfUtils.PixelToPoints(x);
-        var _y = PdfUtils.PixelToPoints(y);
 
-        pdfGfx.DrawImage(img, _x, _y);
+        pdfGfx.DrawImage(img, 
+            PdfUtils.PixelToPoints(x), 
+            PdfUtils.PixelToPoints(y));
     }
 
     public void DrawImage(System.Drawing.Image image, RectangleF src, RectangleF dst, GraphicsUnit srcUnit)
-    {
+    {        
         var img = XImage.FromGdiPlusImage(image);
-        var source = PdfUtils.XRectFromGdiRect(src);
-        var dest = PdfUtils.XRectFromGdiRect(dst);
-        var unit = PdfUtils.GetXGraphicsUnitFromGdiUnit(srcUnit);
+        var sourceRect = PdfUtils.XRectFromGdiRect(src);
+        var destRect = PdfUtils.XRectFromGdiRect(dst);
+        var xGraphicsUnit = PdfUtils.GetXGraphicsUnitFromGdi(srcUnit);
 
-        pdfGfx.DrawImage(img, dest, source, unit);           
+        pdfGfx.DrawImage(img, destRect, sourceRect, xGraphicsUnit);           
     }
 
     public void DrawImage(System.Drawing.Image image, RectangleF rect)
-    {
+    {      
         var img = XImage.FromGdiPlusImage(image);
-        var dest = PdfUtils.XRectFromGdiRect(rect);
+        var destRect = PdfUtils.XRectFromGdiRect(rect);
 
-        pdfGfx.DrawImage(img, dest);
-       
+        pdfGfx.DrawImage(img, destRect);       
     }
 
     public void DrawImage(System.Drawing.Image image, float x, float y, float width, float height)
@@ -194,13 +220,13 @@ internal class PDFGraphicsAdapter : IGraphics
         // Switch to GDI+ to draw image
         gdiGfx.DrawImage(image, points);
 
-        isGdiBitmapDrawn = true;
+        DrawGdiBitmapOnDispose = true;
 
-        Debug.Write("DrawImage with GDI functions");
+        Debug.WriteLine("DrawImage with GDI functions");
     }
 
     public void DrawImage(System.Drawing.Image image, Rectangle destRect, int srcX, int srcY, int srcWidth, int srcHeight, GraphicsUnit srcUnit, ImageAttributes imageAttr)
-    {
+    {        
         DrawImage(image, destRect, (float)srcX, (float)srcY, (float)srcWidth, (float)srcHeight, srcUnit, imageAttr);
     }
 
@@ -208,41 +234,40 @@ internal class PDFGraphicsAdapter : IGraphics
     {
         var img = XImage.FromGdiPlusImage(image);
         var dest = PdfUtils.XRectFromGdiRect(destRect);
-        var unit = PdfUtils.GetXGraphicsUnitFromGdiUnit(srcUnit);
-
+        var unit = PdfUtils.GetXGraphicsUnitFromGdi(srcUnit);
 
         var x = PdfUtils.PixelToPoints(srcX);
         var y = PdfUtils.PixelToPoints(srcY);
-        var w = PdfUtils.PixelToPoints(srcWidth);
-        var h = PdfUtils.PixelToPoints(srcHeight);
+        var width = PdfUtils.PixelToPoints(srcWidth);
+        var height = PdfUtils.PixelToPoints(srcHeight);
 
-        var source = new XRect(x, y, w, h);
+        var sourceRect = new XRect(x, y, width, height);
 
-        pdfGfx.DrawImage(img, dest, source, unit);          
+        pdfGfx.DrawImage(img, dest, sourceRect, unit);          
     }
 
     public void DrawImageUnscaled(System.Drawing.Image image, Rectangle rect)
-    {
+    {        
         var state = pdfGfx.Save();
-        var rc = PdfUtils.XRectFromGdiRect(rect);
-        var pt = new XPoint(rc.X, rc.Y);
+        var clipRect = PdfUtils.XRectFromGdiRect(rect);
+        var sourcePoint = new XPoint(clipRect.X, clipRect.Y);
 
-        pdfGfx.IntersectClip(rc);
-        pdfGfx.DrawImage(XImage.FromGdiPlusImage(image), pt);
+        pdfGfx.IntersectClip(clipRect);
+        pdfGfx.DrawImage(XImage.FromGdiPlusImage(image), sourcePoint);
        
         pdfGfx.Restore(state);
     }
 
     public void DrawLine(Pen pen, float x1, float y1, float x2, float y2)
-    {
-        var p = PdfUtils.XPenFromGdiPen(pen);
+    {     
+        var xPen = PdfUtils.XPenFromGdiPen(pen);
 
         var x1d = PdfUtils.PixelToPoints(x1);
         var y1d = PdfUtils.PixelToPoints(y1);
         var x2d = PdfUtils.PixelToPoints(x2);
         var y2d = PdfUtils.PixelToPoints(y2);
 
-        pdfGfx.DrawLine(p, x1d, y1d, x2d, y2d);         
+        pdfGfx.DrawLine(xPen, x1d, y1d, x2d, y2d);         
     }
 
     public void DrawLine(Pen pen, PointF p1, PointF p2)
@@ -252,64 +277,64 @@ internal class PDFGraphicsAdapter : IGraphics
 
     public void DrawLines(Pen pen, PointF[] points)
     {
-        var pts = PdfUtils.XPointArrayFromGdiPoint(points);
-        var p = PdfUtils.XPenFromGdiPen(pen);
+        var xPointsArray = PdfUtils.XPointArrayFromGdiPointF(points);
+        var xPen = PdfUtils.XPenFromGdiPen(pen);
 
-        pdfGfx.DrawLines(p, pts);
+        pdfGfx.DrawLines(xPen, xPointsArray);
     }
 
     public void DrawPath(Pen outlinePen, GraphicsPath path)
-    {
-        var p = PdfUtils.XPenFromGdiPen(outlinePen);
-        var _path = PdfUtils.XGraphicsPathFromGdiPath(path);
+    {      
+        var xPen = PdfUtils.XPenFromGdiPen(outlinePen);
+        var xGraphicsPath = PdfUtils.XGraphicsPathFromGdiPath(path);
 
-        pdfGfx.DrawPath(p, _path);
+        pdfGfx.DrawPath(xPen, xGraphicsPath);
     }
 
     public void DrawPie(Pen pen, float x, float y, float width, float height, float startAngle, float sweepAngle)
     {
-        var p = PdfUtils.XPenFromGdiPen(pen);
+        var xPen = PdfUtils.XPenFromGdiPen(pen);
         var _x = PdfUtils.PixelToPoints(x);
         var _y = PdfUtils.PixelToPoints(y);
         var _w = PdfUtils.PixelToPoints(width);
         var _h = PdfUtils.PixelToPoints(height);
 
-        pdfGfx.DrawPie(p, _x, _y, _w, _h, startAngle, sweepAngle);
+        pdfGfx.DrawPie(xPen, _x, _y, _w, _h, startAngle, sweepAngle);
     }
 
     public void DrawPolygon(Pen pen, PointF[] points)
     {
-        var p = PdfUtils.XPenFromGdiPen(pen);
-        var pts = PdfUtils.XPointArrayFromGdiPoint(points);
+        var xPen = PdfUtils.XPenFromGdiPen(pen);
+        var xPointsArray = PdfUtils.XPointArrayFromGdiPointF(points);
 
-        pdfGfx.DrawPolygon(p, pts);
+        pdfGfx.DrawPolygon(xPen, xPointsArray);
     }
 
     public void DrawPolygon(Pen pen, Point[] points)
     {
-        var p = PdfUtils.XPenFromGdiPen(pen);
-        var pts = PdfUtils.XPointArrayFromGdiPoint(points);
+        var xPen = PdfUtils.XPenFromGdiPen(pen);
+        var xPointsArray = PdfUtils.XPointArrayFromGdiPoint(points);
 
-        pdfGfx.DrawPolygon(p, pts);
+        pdfGfx.DrawPolygon(xPen, xPointsArray);
     }
 
     public void DrawRectangle(Pen pen, float left, float top, float width, float height)
     {
-        var p = PdfUtils.XPenFromGdiPen(pen);
-        var rc = new XRect(PdfUtils.PixelToPoints(left),
+        var xPen = PdfUtils.XPenFromGdiPen(pen);
+        var destRect = new XRect(PdfUtils.PixelToPoints(left),
                            PdfUtils.PixelToPoints(top),
                            PdfUtils.PixelToPoints(width),
                            PdfUtils.PixelToPoints(height));
 
-        pdfGfx.DrawRectangle(p, rc);
+        pdfGfx.DrawRectangle(xPen, destRect);
     }
 
     public void DrawRectangle(Pen pen, Rectangle rectangle)
     {
-        var p = PdfUtils.XPenFromGdiPen(pen);
-        var rc = PdfUtils.XRectFromGdiRect(rectangle);
+        var xPen = PdfUtils.XPenFromGdiPen(pen);
+        var destRect = PdfUtils.XRectFromGdiRect(rectangle);
 
-        pdfGfx.DrawRectangle(p, rc);
+        pdfGfx.DrawRectangle(xPen, destRect);
     }
 
     public void DrawString(string text, Font font, Brush brush, float left, float top)
@@ -319,16 +344,15 @@ internal class PDFGraphicsAdapter : IGraphics
 
     public void DrawString(string text, Font font, Brush brush, float left, float top, StringFormat format)
     {
-        var f = PdfUtils.XFontFromGdiFont(font);
-        var br = PdfUtils.XBrushFromGdiBrush(brush);
+        var xFont = PdfUtils.XFontFromGdiFont(font);
+        var xBrush = PdfUtils.XBrushFromGdiBrush(brush);
 
         var x = PdfUtils.PixelToPoints(left);
         var y = PdfUtils.PixelToPoints(top);
 
-        var frmt = PdfUtils.XStringFormatFromGdiFormat(format);
+        var xStringFormat = PdfUtils.XStringFormatFromGdiFormat(format);
 
-
-        pdfGfx.DrawString(text, f, br, x, y, frmt);
+        pdfGfx.DrawString(text, xFont, xBrush, x, y, xStringFormat);
     }
 
     public void DrawString(string text, Font font, Brush brush, RectangleF textRect)
@@ -337,27 +361,27 @@ internal class PDFGraphicsAdapter : IGraphics
     }
 
     public void DrawString(string text, Font font, Brush brush, RectangleF textRect, StringFormat format)
-    {            
-        var f = PdfUtils.XFontFromGdiFont(font);
-        var br = PdfUtils.XBrushFromGdiBrush(brush);
-        var rc = PdfUtils.XRectFromGdiRect(textRect);
-        var tf = new XTextFormatter(pdfGfx);
+    {       
+        var xFont = PdfUtils.XFontFromGdiFont(font);
+        var xBrush = PdfUtils.XBrushFromGdiBrush(brush);
+        var destRect = PdfUtils.XRectFromGdiRect(textRect);
+        var textFormatter = new XTextFormatter(pdfGfx);
         var state = pdfGfx.Save();           
 
-        tf.Alignment = PdfUtils.GetParagraphAlignment(format);
+        textFormatter.Alignment = PdfUtils.GetParagraphAlignment(format);
 
-        // Align text vertically and fit words to rect WordWidth
-        var s = FitStringToRectWidth(text, f, rc);
-        AlignRectVertically(s, f, format, ref rc);
+        // Align text vertically and fit words to sourceRect WordWidth
+        var s = FitStringToRectWidth(text, xFont, destRect);
+        AlignRectVertically(s, xFont, format, ref destRect);
 
-        pdfGfx.IntersectClip(rc);
-        tf.DrawString(s, f, br, rc);
+        pdfGfx.IntersectClip(destRect);
+        textFormatter.DrawString(s, xFont, xBrush, destRect);
 
         pdfGfx.Restore(state); 
     }
 
     public void DrawString(string s, Font font, Brush brush, PointF point, StringFormat format)
-    {
+    {       
         DrawString(s, font, brush, point.X, point.Y, format);
     }
 
@@ -439,7 +463,7 @@ internal class PDFGraphicsAdapter : IGraphics
     public void FillPolygon(Brush brush, PointF[] points)
     {
         var b = PdfUtils.XBrushFromGdiBrush(brush);
-        var pts = PdfUtils.XPointArrayFromGdiPoint(points);
+        var pts = PdfUtils.XPointArrayFromGdiPointF(points);
 
         pdfGfx.DrawPolygon(b, pts, XFillMode.Alternate);
     }
@@ -469,7 +493,7 @@ internal class PDFGraphicsAdapter : IGraphics
     {
         gdiGfx.FillRegion(brush, region);
 
-        isGdiBitmapDrawn = true;
+        DrawGdiBitmapOnDispose = true;
 
         Debug.Write("FillRegion with GDI functions");
     }
@@ -490,8 +514,8 @@ internal class PDFGraphicsAdapter : IGraphics
 
     public SizeF MeasureString(string text, Font font)
     {
-        var f = PdfUtils.XFontFromGdiFont(font);
-        var size = pdfGfx.MeasureString(text, f);
+        var xfont = PdfUtils.XFontFromGdiFont(font);
+        var size = pdfGfx.MeasureString(text, xfont);
 
         var gdiSize = size.ToSizeF();
 
@@ -513,10 +537,10 @@ internal class PDFGraphicsAdapter : IGraphics
 
     public SizeF MeasureString(string text, Font font, int v, StringFormat format)
     {
-        var f = PdfUtils.XFontFromGdiFont(font);
-        var frmt = PdfUtils.XStringFormatFromGdiFormat(format);
+        var xfont = PdfUtils.XFontFromGdiFont(font);
+        var xformat = PdfUtils.XStringFormatFromGdiFormat(format);
 
-        var size = pdfGfx.MeasureString(text, f, frmt);
+        var size = pdfGfx.MeasureString(text, xfont, xformat);
         var gdiSize = size.ToSizeF();
 
         gdiSize.Width = Convert.ToSingle(PdfUtils.PointsToPixel(gdiSize.Width));
@@ -553,13 +577,11 @@ internal class PDFGraphicsAdapter : IGraphics
                 break;
             default:
                 throw new NotSupportedException("MatrixOrder not supported");
-        }
-
-        gdiGfx.MultiplyTransform(matrix, prepend); 
+        }        
     }
 
     public void ResetClip()
-    {
+    {       
         pdfGfx.IntersectClip(new XRect(0, 0, pdfGfx.PageSize.Width, pdfGfx.PageSize.Height));
     }
 
@@ -569,45 +591,42 @@ internal class PDFGraphicsAdapter : IGraphics
     }
 
     public void RotateTransform(float angle)
-    {
+    {       
         pdfGfx.RotateTransform(angle);    
     }
 
     public IGraphicsState Save()
     {
-        PdfGraphicsState state = new PdfGraphicsState(pdfGfx.Save());
-
-        return state;
+        return new PdfGraphicsState(pdfGfx.Save());       
     }
 
     public void ScaleTransform(float scaleX, float scaleY)
-    {
+    {       
         pdfGfx.ScaleTransform(PdfUtils.PixelToPoints(scaleX),
                             PdfUtils.PixelToPoints(scaleY));          
     }
 
     public void SetClip(RectangleF rect)
-    {        
+    {       
         pdfGfx.IntersectClip(rect);
     }
 
     public void SetClip(RectangleF rect, CombineMode combineMode)
-    {
-         pdfGfx.IntersectClip(rect);    
+    {        
+        pdfGfx.IntersectClip(rect);    
     }
 
     public void SetClip(GraphicsPath path, CombineMode combineMode)
-    {
-        var p = PdfUtils.XGraphicsPathFromGdiPath(path);
+    {        
+        var xGraphicsPath = PdfUtils.XGraphicsPathFromGdiPath(path);
   
-        pdfGfx.IntersectClip(p);           
+        pdfGfx.IntersectClip(xGraphicsPath);           
     }
 
     public void TranslateTransform(float left, float top)
-    {            
+    {        
         pdfGfx.TranslateTransform(PdfUtils.PixelToPoints(left),
-                                PdfUtils.PixelToPoints(top));
-       
+                                PdfUtils.PixelToPoints(top));       
     }
 
     /// <summary>
@@ -616,40 +635,39 @@ internal class PDFGraphicsAdapter : IGraphics
     /// <param name="text">Text to align</param>
     /// <param name="font">Font used to draw</param>
     /// <param name="format">GDI string format (used to check LineAlignment)</param>
-    /// <param name="rect">Ref to current drawing rectangle</param>
-    private void AlignRectVertically(string text, XFont font, StringFormat format, ref XRect rect)
+    /// <param name="sourceRect">Ref to current drawing rectangle</param>
+    private void AlignRectVertically(string text, XFont font, StringFormat format, ref XRect sourceRect)
     {           
-        double Offset;
-        var NoWrap = format.FormatFlags.HasFlag(StringFormatFlags.NoWrap);
-        var TextSize = pdfGfx.MeasureString(text, font);
-        var Lines = Math.Ceiling(TextSize.Width / rect.Width);
+        double verticalOffset;
+        var noWrapChecked = format.FormatFlags.HasFlag(StringFormatFlags.NoWrap);
+        var textSize = pdfGfx.MeasureString(text, font);
+        var textLines = Math.Ceiling(textSize.Width / sourceRect.Width);
 
-        // If no Word Warp use only one line and cut string to rect WordWidth 
+        // If Word Warp is true, use only one line and cut string to sourceRect Width 
         // with IntersectClip
-        if (NoWrap)
-            Lines = 1;
+        if (noWrapChecked)
+            textLines = 1;
 
-        var textHeight = Math.Min(TextSize.Height * Lines, rect.Height);
+        var textHeight = Math.Min(textSize.Height * textLines, sourceRect.Height);
 
         switch (format.LineAlignment)
         {
             case StringAlignment.Near:
-                Offset = 0.0;
+                verticalOffset = 0.0;
                 break;
             case StringAlignment.Center:
-                Offset = (rect.Height - textHeight) / 2.0;
+                verticalOffset = (sourceRect.Height - textHeight) / 2.0;
                 break;
             case StringAlignment.Far:
-                Offset = rect.Height - textHeight;
+                verticalOffset = sourceRect.Height - textHeight;
                 break;
             default:
-                Offset = 0.0;
+                verticalOffset = 0.0;
                 break;
-        }
-                    
+        }                   
 
-        rect.Y += Offset;
-        rect.Height -= Offset;           
+        sourceRect.Y += verticalOffset;
+        sourceRect.Height -= verticalOffset;           
     }
 
     /// <summary>
@@ -664,7 +682,7 @@ internal class PDFGraphicsAdapter : IGraphics
         var TextBuilder = new StringBuilder(text.Length);      
         var Words = text.Split(Whitespace);  
 
-        // Find words with WordWidth > rect.Width and add a space to 
+        // Find words with WordWidth > sourceRect.Width and add a space to 
         // wrap word by PDFSharp TextFormatter
         for (int i = 0; i < Words.Length; i++)
         {
@@ -675,7 +693,7 @@ internal class PDFGraphicsAdapter : IGraphics
             if (WordWidth > rect.Width)
             {
                 // Append char by char and add a space when new word width
-                // is greater than rect.Width
+                // is greater than sourceRect.Width
                 var WordBuilder = new StringBuilder(Word.Length + 1);
                 var Index = 0;
                 var NewWordWidth = 0.0;

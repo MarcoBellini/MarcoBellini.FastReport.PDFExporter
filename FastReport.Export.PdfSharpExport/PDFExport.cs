@@ -1,6 +1,7 @@
-﻿using PdfSharp.Pdf;
+﻿using FastReport.Utils;
 using PdfSharp.Drawing;
-using FastReport.Utils;
+using PdfSharp.Pdf;
+using System.Diagnostics;
 using System.Drawing;
 
 namespace FastReport.Export.PdfExporter;
@@ -8,13 +9,13 @@ namespace FastReport.Export.PdfExporter;
 public partial class PDFExport : ExportBase
 {
     
-    private PdfDocument? _Document;
-    private PdfPage? _Page;
-    private PDFGraphicsAdapter? _Bind;  
+    private PdfDocument? pdfDocument;
+    private PdfPage? pdfPage;
+    private PDFGraphicsAdapter? pdfAdapter;  
 
     public PDFExport()
     { 
-
+       
     }
 
     protected override void Dispose(bool disposing)
@@ -29,110 +30,111 @@ public partial class PDFExport : ExportBase
     {
         base.Start();      
 
-        _Document = new PdfDocument();
+        pdfDocument = new PdfDocument();
         
         // Use report informations
-        _Document.Info.Title = Report.ReportInfo.Name ;
-        _Document.Info.Author = Report.ReportInfo.Author;
-        _Document.Info.Comment = Report.ReportInfo.Description;           
+        pdfDocument.Info.Title = Report.ReportInfo.Name ;
+        pdfDocument.Info.Author = Report.ReportInfo.Author;
+        pdfDocument.Info.Comment = Report.ReportInfo.Description;           
     }
 
     /// <summary>
-    /// This method is called at the start of exports of each page.
+    /// This method is called at the start of exports of each reportPage.
     /// </summary>
-    /// <param name="page">Page for export may be empty in this method.</param>
-    protected override void ExportPageBegin(ReportPage page)
+    /// <param name="reportPage">Page for export may be empty in this method.</param>
+    protected override void ExportPageBegin(ReportPage reportPage)
     {
-        base.ExportPageBegin(page);
+        base.ExportPageBegin(reportPage);
 
-        if(_Document is null)
-            throw new NullReferenceException("_Document is not initialized");
+        if(pdfDocument is null)
+            throw new NullReferenceException("pdfDocument is not initialized");
 
-        _Page = _Document.AddPage();
+        pdfPage = pdfDocument.AddPage();
 
-        var Width = ExportUtils.GetPageWidth(page);
-        var Height = ExportUtils.GetPageHeight(page);
+        var pageWidth = ExportUtils.GetPageWidth(reportPage);
+        var pageHeight = ExportUtils.GetPageHeight(reportPage);
 
         // Convert to Points Units
-        _Page.Width = XUnit.FromPoint(PdfUtils.MmToPoints(Width));
-        _Page.Height = XUnit.FromPoint(PdfUtils.MmToPoints(Height));    
+        pdfPage.Width = XUnit.FromPoint(PdfUtils.MmToPoints(pageWidth));
+        pdfPage.Height = XUnit.FromPoint(PdfUtils.MmToPoints(pageHeight));    
 
-        var LeftMargin = PdfUtils.MmToPixel(page.LeftMargin);
-        var TopMargin =  PdfUtils.MmToPixel(page.TopMargin);
+        var LeftMargin = PdfUtils.MmToPixel(reportPage.LeftMargin);
+        var TopMargin =  PdfUtils.MmToPixel(reportPage.TopMargin);
 
-        _Bind = new PDFGraphicsAdapter(XGraphics.FromPdfPage(_Page), new XSize(LeftMargin, TopMargin));
+        pdfAdapter = new PDFGraphicsAdapter(XGraphics.FromPdfPage(pdfPage), new XSize(LeftMargin, TopMargin));
 
-        // Draw the page background
-        using (TextObject _PageFill = new TextObject())
+        // Draw the reportPage background
+        using (TextObject pageFill = new TextObject())
         {
-            _PageFill.Fill = page.Fill;
-            _PageFill.Left = -page.LeftMargin * Units.Millimeters;
-            _PageFill.Top = -page.TopMargin * Units.Millimeters;
-            _PageFill.Width = ExportUtils.GetPageWidth(page) * Units.Millimeters;
-            _PageFill.Height = ExportUtils.GetPageHeight(page) * Units.Millimeters;
-            _PageFill.Draw(new FRPaintEventArgs(_Bind, 1.0f, 1.0f, Report.GraphicCache));
-        }
-
-        // Translate origin by Margins values
-        _Bind.TranslateTransform(Convert.ToSingle(LeftMargin), Convert.ToSingle(TopMargin));        
+            pageFill.Fill = reportPage.Fill;
+            pageFill.Left = -reportPage.LeftMargin * Units.Millimeters;
+            pageFill.Top = -reportPage.TopMargin * Units.Millimeters;
+            pageFill.Width = ExportUtils.GetPageWidth(reportPage) * Units.Millimeters;
+            pageFill.Height = ExportUtils.GetPageHeight(reportPage) * Units.Millimeters;
+            pageFill.Draw(new FRPaintEventArgs(pdfAdapter, 1.0f, 1.0f, Report.GraphicCache));
+        }     
 
         // Export bottom watermark
-        if (page.Watermark.Enabled && !page.Watermark.ShowImageOnTop)
-            AddImageWatermark(page);
-        if (page.Watermark.Enabled && !page.Watermark.ShowTextOnTop)
-            AddTextWatermark(page);
+        if (reportPage.Watermark.Enabled && !reportPage.Watermark.ShowImageOnTop)
+            AddImageWatermark(reportPage);
+        if (reportPage.Watermark.Enabled && !reportPage.Watermark.ShowTextOnTop)
+            AddTextWatermark(reportPage);
 
-         
+        // Translate origin by Margins values
+        pdfAdapter.TranslateTransform(Convert.ToSingle(LeftMargin), Convert.ToSingle(TopMargin));
     }
 
     /// <summary>
-    /// This method is called at the end of exports of each page.
+    /// This method is called at the end of exports of each reportPage.
     /// </summary>
-    /// <param name="page">Page for export may be empty in this method.</param>
-    protected override void ExportPageEnd(ReportPage page)
+    /// <param name="reportPage">Page for export may be empty in this method.</param>
+    protected override void ExportPageEnd(ReportPage reportPage)
     {
-        base.ExportPageEnd(page);
+        base.ExportPageEnd(reportPage);
 
-        // Draw page borders
-        if (page.Border.Lines != BorderLines.None)
+        // Draw reportPage borders
+        if (reportPage.Border.Lines != BorderLines.None)
         {
-            using (TextObject _PageBorder = new TextObject())
+            using (TextObject pageBorder = new TextObject())
             {
-                _PageBorder.Border = page.Border;
-                _PageBorder.Left = 0;
-                _PageBorder.Top = 0;
-                _PageBorder.Width = (ExportUtils.GetPageWidth(page) - page.LeftMargin - page.RightMargin) * Units.Millimeters;
-                _PageBorder.Height = (ExportUtils.GetPageHeight(page) - page.TopMargin - page.BottomMargin) * Units.Millimeters;
-                _PageBorder.Draw(new FRPaintEventArgs(_Bind, 1.0f, 1.0f, Report.GraphicCache));
+                pageBorder.Border = reportPage.Border;
+                pageBorder.Left = 0;
+                pageBorder.Top = 0;
+                pageBorder.Width = (ExportUtils.GetPageWidth(reportPage) - reportPage.LeftMargin - reportPage.RightMargin) * Units.Millimeters;
+                pageBorder.Height = (ExportUtils.GetPageHeight(reportPage) - reportPage.TopMargin - reportPage.BottomMargin) * Units.Millimeters;
+                pageBorder.Draw(new FRPaintEventArgs(pdfAdapter, 1.0f, 1.0f, Report.GraphicCache));
             }
         }
 
+        // Remove translation by Margins values
+        pdfAdapter?.TranslateTransform(-Convert.ToSingle(reportPage.LeftMargin * Units.Millimeters), -Convert.ToSingle(reportPage.TopMargin * Units.Millimeters));
+
         // Export top watermark
-        if (page.Watermark.Enabled && page.Watermark.ShowImageOnTop)
-            AddImageWatermark(page);
-        if (page.Watermark.Enabled && page.Watermark.ShowTextOnTop)
-            AddTextWatermark(page);
+        if (reportPage.Watermark.Enabled && reportPage.Watermark.ShowImageOnTop)
+            AddImageWatermark(reportPage);
+        if (reportPage.Watermark.Enabled && reportPage.Watermark.ShowTextOnTop)
+            AddTextWatermark(reportPage);
 
-        if (_Bind is null)
-            throw new NullReferenceException("_Page is not initialized");
+        if (pdfAdapter is null)
+            throw new NullReferenceException("pdfPage is not initialized");
 
 
-        _Bind?.Dispose();
+        pdfAdapter?.Dispose();
     }
 
     /// <summary>
-    /// This method is called for each band on exported page.
+    /// This method is called for each band on exported reportPage.
     /// </summary>
     /// <param name="band">Band, dispose after method compite.</param>
     protected override void ExportBand(BandBase band)
     {
         base.ExportBand(band);
 
-        if (_Bind is null)
-            throw new NullReferenceException("_Page is not initialized");
+        if (pdfAdapter is null)
+            throw new NullReferenceException("pdfPage is not initialized");
 
         // Draw the band background
-        band.Draw(new FRPaintEventArgs(_Bind, 1.0f, 1.0f, Report.GraphicCache));
+        band.Draw(new FRPaintEventArgs(pdfAdapter, 1.0f, 1.0f, Report.GraphicCache));
 
         // Draw band objects
         foreach (Base c in band.ForEachAllConvectedObjects(this))
@@ -146,7 +148,7 @@ public partial class PDFExport : ExportBase
             if ((obj is null) || (obj.Exportable == false))
                 continue;
             
-            obj.Draw(new FRPaintEventArgs(_Bind, 1.0f, 1.0f, Report.GraphicCache));                                  
+            obj.Draw(new FRPaintEventArgs(pdfAdapter, 1.0f, 1.0f, Report.GraphicCache));                                  
         }
     }
 
@@ -158,45 +160,44 @@ public partial class PDFExport : ExportBase
     {
         base.Finish();
 
-        if (_Document is null)
-            throw new NullReferenceException("_Document is not initialized");
+        if (pdfDocument is null)
+            throw new NullReferenceException("pdfDocument is not initialized");
 
         // Save to FastReport Stream
-        _Document.Save(Stream);
+        pdfDocument.Save(Stream);
 
-        _Document.Close();          
+        pdfDocument.Close();          
     }
 
     /// <summary>
-    /// Add Image Watermark to page
+    /// Add Image Watermark to reportPage
     /// </summary>  
-    private void AddImageWatermark(ReportPage page)
+    private void AddImageWatermark(ReportPage reporPage)
     {
-        if (_Bind is null)
-            throw new NullReferenceException("_Page is not initialized");
+        if (pdfAdapter is null)
+            throw new NullReferenceException("pdfPage is not initialized");
 
 
-        page.Watermark.DrawImage(new FRPaintEventArgs(_Bind, 1.0f, 1.0f, Report.GraphicCache),
-                new RectangleF(0, 0, ExportUtils.GetPageWidth(page) * Units.Millimeters, ExportUtils.GetPageHeight(page) * Units.Millimeters),
-                page.Report, false);
+        reporPage.Watermark.DrawImage(new FRPaintEventArgs(pdfAdapter, 1.0f, 1.0f, Report.GraphicCache),
+                new RectangleF(0, 0, ExportUtils.GetPageWidth(reporPage) * Units.Millimeters, ExportUtils.GetPageHeight(reporPage) * Units.Millimeters),
+                reporPage.Report, false);
         
     }
 
     /// <summary>
-    /// Add Text Watermark to page
+    /// Add Text Watermark to reportPage
     /// </summary>
-    private void AddTextWatermark(ReportPage page)
+    private void AddTextWatermark(ReportPage reportPage)
     {
+        if (pdfAdapter is null)
+            throw new NullReferenceException("pdfPage is not initialized");
 
-        if (_Bind is null)
-            throw new NullReferenceException("_Page is not initialized");
-
-        if (string.IsNullOrEmpty(page.Watermark.Text))
+        if (string.IsNullOrEmpty(reportPage.Watermark.Text))
             return;
 
-        page.Watermark.DrawText(new FRPaintEventArgs(_Bind, 1.0f, 1.0f, Report.GraphicCache),
-            new RectangleF(0, 0, ExportUtils.GetPageWidth(page) * Units.Millimeters, ExportUtils.GetPageHeight(page) * Units.Millimeters),
-            page.Report, false);
+        reportPage.Watermark.DrawText(new FRPaintEventArgs(pdfAdapter, 1.0f, 1.0f, Report.GraphicCache),
+            new RectangleF(0, 0, ExportUtils.GetPageWidth(reportPage) * Units.Millimeters, ExportUtils.GetPageHeight(reportPage) * Units.Millimeters),
+            reportPage.Report, false);
         
     }
 

@@ -5,5 +5,5 @@ namespace FastReport.Export.PdfExporter;
 
 internal interface PDFBrushFactory
 {
-    public XBrush CreateBrush(Brush brush);
+    public XBrush CreateXBrush(Brush brush);
 }

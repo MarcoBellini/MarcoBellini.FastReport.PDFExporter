@@ -8,7 +8,7 @@ namespace FastReport.Export.PdfExporter;
 internal class PDFBrushFactoryImpl : PDFBrushFactory
 {
 
-    public XBrush CreateBrush(Brush brush)
+    public XBrush CreateXBrush(Brush brush)
     {  
         switch (brush)
         {
@@ -19,6 +19,7 @@ internal class PDFBrushFactoryImpl : PDFBrushFactory
                 return CreateLinearGradientBrush(brush);
               
             default:
+                //throw new NotSupportedException($"Brush of type {brush.GetType().FullName} is not supported.");
                 return CreateFallbackBrush();               
         }
     }
