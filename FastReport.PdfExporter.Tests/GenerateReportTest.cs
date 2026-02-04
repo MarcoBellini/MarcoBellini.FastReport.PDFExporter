@@ -39,7 +39,7 @@ public class GenerateReportTest
 
         var OutputPath = Path.Combine(Path.GetTempPath(), "SimpleReport.pdf");
 
-        Assert.True(report.Prepare(), "Impossibile preparare il report");
+        Assert.True(report.Prepare(), "Cannot prepare the report");
 
         report.Export(pdfExport, OutputPath);
 
@@ -54,24 +54,12 @@ public class GenerateReportTest
 
         report.Load("Reports/AdvancedReport.frx");
 
-
         var OutputPath = Path.Combine(Path.GetTempPath(), "AdvancedReport.pdf");
 
-        Assert.True(report.Prepare(), "Impossibile preparare il report");
+        Assert.True(report.Prepare(), "Cannot prepare the report");
+               
+         report.Export(pdfExport, OutputPath);      
 
-        try
-        {
-            report.Export(pdfExport, OutputPath);
-        }
-        catch (Exception ex)
-        {
-            
-                throw new Exception("Errore durante l'esportazione del report in PDF", ex);
-            
-
-
-            
-        }
         Assert.True(File.Exists(OutputPath));
     }
 }

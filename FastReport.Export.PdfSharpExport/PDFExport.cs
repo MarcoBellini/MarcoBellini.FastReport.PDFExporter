@@ -1,7 +1,6 @@
 ﻿using FastReport.Utils;
 using PdfSharp.Drawing;
 using PdfSharp.Pdf;
-using System.Diagnostics;
 using System.Drawing;
 
 namespace FastReport.Export.PdfExporter;
@@ -21,6 +20,8 @@ public partial class PDFExport : ExportBase
     protected override void Dispose(bool disposing)
     {
         base.Dispose(disposing);
+
+        pdfDocument?.Dispose();
     }
 
     /// <summary>

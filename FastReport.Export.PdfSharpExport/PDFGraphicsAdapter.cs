@@ -636,7 +636,7 @@ internal class PDFGraphicsAdapter : IGraphics
     /// <param name="font">Font used to draw</param>
     /// <param name="format">GDI string format (used to check LineAlignment)</param>
     /// <param name="sourceRect">Ref to current drawing rectangle</param>
-    private void AlignRectVertically(string text, XFont font, StringFormat format, ref XRect sourceRect)
+    internal void AlignRectVertically(string text, XFont font, StringFormat format, ref XRect sourceRect)
     {           
         double verticalOffset;
         var noWrapChecked = format.FormatFlags.HasFlag(StringFormatFlags.NoWrap);
@@ -677,7 +677,7 @@ internal class PDFGraphicsAdapter : IGraphics
     /// <param name="font">XFont used to draw the string</param>
     /// <param name="rect">Layout rectangle</param>
     /// <returns>A string where every words fits into rectangle WordWidth</returns>
-    private string FitStringToRectWidth(string text, XFont font, XRect rect)
+    internal string FitStringToRectWidth(string text, XFont font, XRect rect)
     {
         var TextBuilder = new StringBuilder(text.Length);      
         var Words = text.Split(Whitespace);  
