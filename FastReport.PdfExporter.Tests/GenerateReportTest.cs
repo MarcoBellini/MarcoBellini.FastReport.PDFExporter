@@ -58,7 +58,7 @@ public class GenerateReportTest
 
         Assert.True(report.Prepare(), "Cannot prepare the report");
                
-         report.Export(pdfExport, OutputPath);      
+        report.Export(pdfExport, OutputPath);      
 
         Assert.True(File.Exists(OutputPath));
     }

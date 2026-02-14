@@ -66,11 +66,11 @@ internal class PDFGraphicsAdapter : IGraphics
     {
         get 
         {
-            throw new NotSupportedException("Cannot Set/Get Clip Region");
+            throw new NotSupportedException("Cannot Get Clip Region");
         }
         set
         {
-            throw new NotSupportedException("Cannot Set/Get Clip Region");
+            throw new NotSupportedException("Cannot Set Clip Region");
         }
     } 
 
@@ -364,18 +364,18 @@ internal class PDFGraphicsAdapter : IGraphics
     {       
         var xFont = PdfUtils.XFontFromGdiFont(font);
         var xBrush = PdfUtils.XBrushFromGdiBrush(brush);
-        var destRect = PdfUtils.XRectFromGdiRect(textRect);
+        var layoutRect = PdfUtils.XRectFromGdiRect(textRect);
         var textFormatter = new XTextFormatter(pdfGfx);
         var state = pdfGfx.Save();           
 
         textFormatter.Alignment = PdfUtils.GetParagraphAlignment(format);
 
-        // Align text vertically and fit words to sourceRect WordWidth
-        var s = FitStringToRectWidth(text, xFont, destRect);
-        AlignRectVertically(s, xFont, format, ref destRect);
+        
+        var preparedText = GetTextWrappedToRectWidth(text, xFont, layoutRect);
+        var alignedRect = GetVerticallyAlignedRectForText(preparedText, xFont, format, layoutRect);
 
-        pdfGfx.IntersectClip(destRect);
-        textFormatter.DrawString(s, xFont, xBrush, destRect);
+        pdfGfx.IntersectClip(alignedRect);
+        textFormatter.DrawString(preparedText, xFont, xBrush, alignedRect);
 
         pdfGfx.Restore(state); 
     }
@@ -636,95 +636,80 @@ internal class PDFGraphicsAdapter : IGraphics
     /// <param name="font">Font used to draw</param>
     /// <param name="format">GDI string format (used to check LineAlignment)</param>
     /// <param name="sourceRect">Ref to current drawing rectangle</param>
-    internal void AlignRectVertically(string text, XFont font, StringFormat format, ref XRect sourceRect)
+    internal XRect GetVerticallyAlignedRectForText(string text, XFont font, StringFormat format, XRect sourceRect)
     {           
-        double verticalOffset;
-        var noWrapChecked = format.FormatFlags.HasFlag(StringFormatFlags.NoWrap);
+        var hasNoWrap = format.FormatFlags.HasFlag(StringFormatFlags.NoWrap);
+
         var textSize = pdfGfx.MeasureString(text, font);
-        var textLines = Math.Ceiling(textSize.Width / sourceRect.Width);
+        var lineCount = hasNoWrap ? 1 : Math.Ceiling(textSize.Width / sourceRect.Width);
+        var textHeight = Math.Min(textSize.Height * lineCount, sourceRect.Height);
 
-        // If Word Warp is true, use only one line and cut string to sourceRect Width 
-        // with IntersectClip
-        if (noWrapChecked)
-            textLines = 1;
-
-        var textHeight = Math.Min(textSize.Height * textLines, sourceRect.Height);
-
-        switch (format.LineAlignment)
+        double verticalOffset = format.LineAlignment switch
         {
-            case StringAlignment.Near:
-                verticalOffset = 0.0;
-                break;
-            case StringAlignment.Center:
-                verticalOffset = (sourceRect.Height - textHeight) / 2.0;
-                break;
-            case StringAlignment.Far:
-                verticalOffset = sourceRect.Height - textHeight;
-                break;
-            default:
-                verticalOffset = 0.0;
-                break;
-        }                   
+            StringAlignment.Near => 0.0,
+            StringAlignment.Center => (sourceRect.Height - textHeight) / 2.0,
+            StringAlignment.Far => sourceRect.Height - textHeight,
+            _ => 0.0
+        };
 
-        sourceRect.Y += verticalOffset;
-        sourceRect.Height -= verticalOffset;           
+        var newY = sourceRect.Y + verticalOffset;
+        var newHeight = sourceRect.Height - verticalOffset;
+
+        return new(sourceRect.X, newY, sourceRect.Width, newHeight);
     }
 
     /// <summary>
-    /// Fit every word of the string to fit the rectangle WordWidth (clip height with IntersectRect)
+    /// Fit every word of the string to fit the rectangle width. If a word is wider than the rectangle, split it with whitespace to fit the width.
     /// </summary>
     /// <param name="text">Input string</param>
     /// <param name="font">XFont used to draw the string</param>
     /// <param name="rect">Layout rectangle</param>
     /// <returns>A string where every words fits into rectangle WordWidth</returns>
-    internal string FitStringToRectWidth(string text, XFont font, XRect rect)
+    internal string GetTextWrappedToRectWidth(string text, XFont font, XRect rect)
     {
-        var TextBuilder = new StringBuilder(text.Length);      
-        var Words = text.Split(Whitespace);  
+        var result = new StringBuilder(text.Length);      
+        var words = text.Split(Whitespace);
 
-        // Find words with WordWidth > sourceRect.Width and add a space to 
-        // wrap word by PDFSharp TextFormatter
-        for (int i = 0; i < Words.Length; i++)
+        for (int i = 0; i < words.Length; i++)       
         {
-            var Word = Words[i];
-            var WordWidth = pdfGfx.MeasureString(Word, font).Width;
-            var AddWhiteSpace = (i < Words.Length - 1);
+            var word = words[i];
 
-            if (WordWidth > rect.Width)
-            {
-                // Append char by char and add a space when new word width
-                // is greater than sourceRect.Width
-                var WordBuilder = new StringBuilder(Word.Length + 1);
-                var Index = 0;
-                var NewWordWidth = 0.0;
-
-                while (Index < Word.Length)
-                {
-                    var chr = Word[Index];
-                    NewWordWidth += pdfGfx.MeasureString(chr.ToString(), font).Width;
-
-                    if (NewWordWidth > rect.Width)
-                    {
-                        WordBuilder.Append(Whitespace);
-                        NewWordWidth = 0.0;
-                    }
-
-                    WordBuilder.Append(chr);
-                    Index++;
-                }
-
-                TextBuilder.Append(WordBuilder);
-            }
+            if (IsWordWiderThanRect(word, font, rect.Width))
+                result.Append(SplitWordToFitWidth(word, font, rect.Width));
             else
-            {
-                TextBuilder.Append(Word);     
-            }
+                result.Append(word);
 
-            if (AddWhiteSpace)
-                TextBuilder.Append(Whitespace);
-
+            if (i < words.Length - 1)
+                result.Append(Whitespace);
         }
 
-        return TextBuilder.ToString();
+        return result.ToString();
+    }
+
+    private bool IsWordWiderThanRect(string word, XFont font, double maxWidth)
+    {
+        return pdfGfx.MeasureString(word, font).Width > maxWidth;
+    }
+
+    private string SplitWordToFitWidth(string word, XFont font, double maxWidth)
+    {
+        var builder = new StringBuilder(word.Length + 1);
+        double currentWidth = 0;
+
+        foreach (var ch in word)
+        {
+            var charWidth = pdfGfx.MeasureString(ch.ToString(), font).Width;
+
+            if (currentWidth + charWidth > maxWidth)
+            {
+                builder.Append(Whitespace);
+                currentWidth = 0;
+            }
+
+            builder.Append(ch);
+            currentWidth += charWidth;
+        }
+
+        return builder.ToString();
     }
 }
