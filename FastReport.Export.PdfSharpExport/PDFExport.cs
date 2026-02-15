@@ -48,7 +48,7 @@ public partial class PDFExport : ExportBase
         base.ExportPageBegin(reportPage);
 
         if(pdfDocument is null)
-            throw new NullReferenceException("pdfDocument is not initialized");
+            throw new NullReferenceException($"{nameof(pdfDocument)} is not initialized");
 
         pdfPage = pdfDocument.AddPage();
 
@@ -117,10 +117,10 @@ public partial class PDFExport : ExportBase
             AddTextWatermark(reportPage);
 
         if (pdfAdapter is null)
-            throw new NullReferenceException("pdfPage is not initialized");
+            throw new NullReferenceException($"{nameof(pdfAdapter)} is not initialized");
 
 
-        pdfAdapter?.Dispose();
+        pdfAdapter?.Dispose();  
     }
 
     /// <summary>
@@ -132,7 +132,7 @@ public partial class PDFExport : ExportBase
         base.ExportBand(band);
 
         if (pdfAdapter is null)
-            throw new NullReferenceException("pdfPage is not initialized");
+            throw new NullReferenceException($"{nameof(pdfAdapter)} is not initialized");
 
         // Draw the band background
         band.Draw(new FRPaintEventArgs(pdfAdapter, 1.0f, 1.0f, Report.GraphicCache));
@@ -162,7 +162,7 @@ public partial class PDFExport : ExportBase
         base.Finish();
 
         if (pdfDocument is null)
-            throw new NullReferenceException("pdfDocument is not initialized");
+            throw new NullReferenceException($"{nameof(pdfDocument)} is not initialized");
 
         // Save to FastReport Stream
         pdfDocument.Save(Stream);
@@ -176,7 +176,7 @@ public partial class PDFExport : ExportBase
     private void AddImageWatermark(ReportPage reporPage)
     {
         if (pdfAdapter is null)
-            throw new NullReferenceException("pdfPage is not initialized");
+            throw new NullReferenceException($"{nameof(pdfAdapter)} is not initialized");
 
 
         reporPage.Watermark.DrawImage(new FRPaintEventArgs(pdfAdapter, 1.0f, 1.0f, Report.GraphicCache),
@@ -189,9 +189,9 @@ public partial class PDFExport : ExportBase
     /// Add Text Watermark to reportPage
     /// </summary>
     private void AddTextWatermark(ReportPage reportPage)
-    {
+    {      
         if (pdfAdapter is null)
-            throw new NullReferenceException("pdfPage is not initialized");
+            throw new NullReferenceException($"{nameof(pdfAdapter)} is not initialized");
 
         if (string.IsNullOrEmpty(reportPage.Watermark.Text))
             return;

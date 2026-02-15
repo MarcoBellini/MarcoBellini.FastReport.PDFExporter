@@ -1,5 +1,6 @@
 ﻿using PdfSharp.Drawing;
 using PdfSharp.Drawing.Layout;
+using System.CodeDom.Compiler;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -7,19 +8,16 @@ using System.Drawing.Imaging;
 using System.Drawing.Text;
 using System.Text;
 
+
 namespace FastReport.Export.PdfExporter;
 
 internal class PDFGraphicsAdapter : IGraphics
 {
-    private const char Whitespace = ' ';
+    private const char SpaceChar = ' ';
 
     private XGraphics pdfGfx;
-    private Graphics gdiGfx;
-    private Bitmap gdiBitmap;
 
-    private bool DrawGdiBitmapOnDispose = false; 
-
-    public Graphics Graphics => gdiGfx;   
+    public Graphics Graphics => throw new NotSupportedException("Cannot enter PDFSharp gdi object");   
     public float DpiX => 96.0f;
     public float DpiY => 96.0f;
     public bool IsClipEmpty => true;         
@@ -129,6 +127,8 @@ internal class PDFGraphicsAdapter : IGraphics
 
     public PDFGraphicsAdapter(XGraphics xgraphics, XSize PageMargins)
     {
+        ArgumentNullException.ThrowIfNull(xgraphics);
+
         pdfGfx = xgraphics;
 
         // Reduce size of the page subtracting margins
@@ -137,19 +137,11 @@ internal class PDFGraphicsAdapter : IGraphics
 
         Width = PdfUtils.PointsToPixel(Width);
         Height = PdfUtils.PointsToPixel(Height);
-
-        gdiBitmap = new Bitmap((int)Width, (int)Height);
-        gdiGfx = Graphics.FromImage(gdiBitmap);
     }
 
     public void Dispose()
     {
-        // Draw Bitmap drawn using GDI+
-        if(DrawGdiBitmapOnDispose)
-            DrawImage(gdiBitmap, 0, 0, gdiBitmap.Width, gdiBitmap.Height);
-
-        gdiGfx.Dispose();
-        gdiBitmap.Dispose();
+       
     }
 
     public void DrawArc(Pen pen, float x, float y, float width, float height, float startAngle, float sweepAngle)
@@ -217,12 +209,32 @@ internal class PDFGraphicsAdapter : IGraphics
 
     public void DrawImage(System.Drawing.Image image, PointF[] points)
     {
-        // Switch to GDI+ to draw image
-        gdiGfx.DrawImage(image, points);
+        if(points.Length != 3)
+            throw new ArgumentException("Points array must contain exactly 3 points for parallelogram transformation.");
 
-        DrawGdiBitmapOnDispose = true;
+        // Switch to GDI+ to draw image to parallelogram
+        var bitmap = new Bitmap(image.Width, image.Height);
+        var gfx = Graphics.FromImage(bitmap);
+    
+        gfx.DrawImage(image, points);       
 
-        Debug.WriteLine("DrawImage with GDI functions");
+        var boundingBox = GetBoundingBox(points);
+   
+        DrawImage(bitmap, boundingBox);
+    }
+
+    /// <summary>
+    /// Get the bounding box of the parallelogram defined by the specified points.
+    /// </summary>
+    internal static RectangleF GetBoundingBox(PointF[] points)
+    {       
+        var x = points.Min(p => p.X);
+        var y = points.Min(p => p.Y);
+
+        var width = points.Max(p => p.X);
+        var height = points.Max(p => p.Y);
+
+        return new RectangleF(x, y, width, height); 
     }
 
     public void DrawImage(System.Drawing.Image image, Rectangle destRect, int srcX, int srcY, int srcWidth, int srcHeight, GraphicsUnit srcUnit, ImageAttributes imageAttr)
@@ -491,11 +503,26 @@ internal class PDFGraphicsAdapter : IGraphics
 
     public void FillRegion(Brush brush, Region region)
     {
-        gdiGfx.FillRegion(brush, region);
+        var boundingBox = GetRegionBoundingBox(region);
 
-        DrawGdiBitmapOnDispose = true;
+        var bitmap = new Bitmap(boundingBox.Width, boundingBox.Height);
+        var gfx = Graphics.FromImage(bitmap);
 
-        Debug.Write("FillRegion with GDI functions");
+        gfx.FillRegion(brush, region);
+
+        DrawImage(bitmap, boundingBox);
+    }
+
+    internal static Rectangle GetRegionBoundingBox(Region region)
+    {
+        var rects = region.GetRegionScans(new System.Drawing.Drawing2D.Matrix());
+
+        var left = Convert.ToInt32(rects.Min(r => r.Left));
+        var top = Convert.ToInt32(rects.Min(r => r.Top));
+        var right = Convert.ToInt32(rects.Max(r => r.Right));
+        var bottom = Convert.ToInt32(rects.Max(r => r.Bottom));
+
+        return Rectangle.FromLTRB(left, top, right, bottom);
     }
 
     public bool IsVisible(RectangleF rect)
@@ -508,8 +535,10 @@ internal class PDFGraphicsAdapter : IGraphics
 
     public Region[] MeasureCharacterRanges(string text, Font font, RectangleF textRect, StringFormat format)
     {
-        Debug.Write("MeasureCharacterRanges with GDI functions");
-        return gdiGfx.MeasureCharacterRanges(text, font, textRect, format);
+        var bitmap = new Bitmap(Convert.ToInt32(textRect.Width), Convert.ToInt32(textRect.Height));
+        var gfx = Graphics.FromImage(bitmap);
+
+        return gfx.MeasureCharacterRanges(text, font, textRect, format);       
     }
 
     public SizeF MeasureString(string text, Font font)
@@ -553,9 +582,10 @@ internal class PDFGraphicsAdapter : IGraphics
 
     public void MeasureString(string text, Font font, SizeF size, StringFormat format, out int charsFit, out int linesFit)
     {
-        gdiGfx.MeasureString(text, font, size, format, out charsFit, out linesFit);
+        var bitmap = new Bitmap(Convert.ToInt32(size.Width), Convert.ToInt32(size.Height));
+        var gfx = Graphics.FromImage(bitmap);
 
-        Debug.Write("MeasureString with GDI functions");
+        gfx.MeasureString(text, font, size, format, out charsFit, out linesFit);
     }
 
     public SizeF MeasureString(string text, Font font, SizeF layoutArea, StringFormat stringFormat)
@@ -630,12 +660,16 @@ internal class PDFGraphicsAdapter : IGraphics
     }
 
     /// <summary>
-    /// Size the rectangle to align text vertically
+    /// Resize source rectangle Y coordinate and height to align text vertically in the rectangle 
+    /// according to StringFormat.LineAlignment property. 
+    /// 
+    /// This is needed because PdfSharp does not support vertical alignment of text.
     /// </summary>
-    /// <param name="text">Text to align</param>
-    /// <param name="font">Font used to draw</param>
-    /// <param name="format">GDI string format (used to check LineAlignment)</param>
-    /// <param name="sourceRect">Ref to current drawing rectangle</param>
+    /// <param name="text"></param>
+    /// <param name="font"></param>
+    /// <param name="format"></param>
+    /// <param name="sourceRect"></param>
+    /// <returns></returns>
     internal XRect GetVerticallyAlignedRectForText(string text, XFont font, StringFormat format, XRect sourceRect)
     {           
         var hasNoWrap = format.FormatFlags.HasFlag(StringFormatFlags.NoWrap);
@@ -659,16 +693,16 @@ internal class PDFGraphicsAdapter : IGraphics
     }
 
     /// <summary>
-    /// Fit every word of the string to fit the rectangle width. If a word is wider than the rectangle, split it with whitespace to fit the width.
+    /// Returns text with added line breaks to fit the text within the specified rectangle width.
     /// </summary>
-    /// <param name="text">Input string</param>
-    /// <param name="font">XFont used to draw the string</param>
-    /// <param name="rect">Layout rectangle</param>
-    /// <returns>A string where every words fits into rectangle WordWidth</returns>
+    /// <param name="text">Text to prepare</param>
+    /// <param name="font"><c>XFont</c> object used to draw text</param>
+    /// <param name="rect">Destination rectangle</param>
+    /// <returns>Prepared text for <c>DrawString</c> function of PDFSharp</returns>
     internal string GetTextWrappedToRectWidth(string text, XFont font, XRect rect)
     {
         var result = new StringBuilder(text.Length);      
-        var words = text.Split(Whitespace);
+        var words = text.Split(SpaceChar);
 
         for (int i = 0; i < words.Length; i++)       
         {
@@ -680,17 +714,24 @@ internal class PDFGraphicsAdapter : IGraphics
                 result.Append(word);
 
             if (i < words.Length - 1)
-                result.Append(Whitespace);
+                result.Append(SpaceChar);
         }
 
         return result.ToString();
     }
 
+    /// <summary>
+    /// Check if the word is wider than the specified width when drawn with the specified font.
+    /// </summary>
     private bool IsWordWiderThanRect(string word, XFont font, double maxWidth)
     {
         return pdfGfx.MeasureString(word, font).Width > maxWidth;
     }
 
+    /// <summary>
+    /// Split the word into multiple lines by adding line breaks so that each line fits within the 
+    /// specified width when drawn with the specified font.
+    /// </summary>
     private string SplitWordToFitWidth(string word, XFont font, double maxWidth)
     {
         var builder = new StringBuilder(word.Length + 1);
@@ -702,7 +743,7 @@ internal class PDFGraphicsAdapter : IGraphics
 
             if (currentWidth + charWidth > maxWidth)
             {
-                builder.Append(Whitespace);
+                builder.Append(SpaceChar);
                 currentWidth = 0;
             }
 
