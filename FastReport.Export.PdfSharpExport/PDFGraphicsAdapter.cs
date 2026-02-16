@@ -1,7 +1,5 @@
 ﻿using PdfSharp.Drawing;
 using PdfSharp.Drawing.Layout;
-using System.CodeDom.Compiler;
-using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
@@ -125,18 +123,11 @@ internal class PDFGraphicsAdapter : IGraphics
     }
 
 
-    public PDFGraphicsAdapter(XGraphics xgraphics, XSize PageMargins)
+    public PDFGraphicsAdapter(XGraphics pageGraphics)
     {
-        ArgumentNullException.ThrowIfNull(xgraphics);
+        ArgumentNullException.ThrowIfNull(pageGraphics);
 
-        pdfGfx = xgraphics;
-
-        // Reduce size of the page subtracting margins
-        var Width = pdfGfx.PageSize.Width - PageMargins.Width;
-        var Height = pdfGfx.PageSize.Height - PageMargins.Height;            
-
-        Width = PdfUtils.PointsToPixel(Width);
-        Height = PdfUtils.PointsToPixel(Height);
+        pdfGfx = pageGraphics;
     }
 
     public void Dispose()

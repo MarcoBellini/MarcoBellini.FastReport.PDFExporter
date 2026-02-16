@@ -15,7 +15,7 @@ public class GraphicsAdapterTests
         var pdfPage = pdfDocument.AddPage();
 
         using var gfx = XGraphics.FromPdfPage(pdfPage);
-        using var adapter = new PDFGraphicsAdapter(gfx, new XSize(0, 0));
+        using var adapter = new PDFGraphicsAdapter(gfx);
 
         var font = new XFont("Arial", 12);
         var format = new StringFormat
@@ -43,7 +43,7 @@ public class GraphicsAdapterTests
         var pdfPage = pdfDocument.AddPage();
 
         using var gfx = XGraphics.FromPdfPage(pdfPage);
-        using var adapter = new PDFGraphicsAdapter(gfx, new XSize(0, 0));
+        using var adapter = new PDFGraphicsAdapter(gfx);
 
         var font = new XFont("Arial", 12);
         var format = new StringFormat
@@ -86,7 +86,7 @@ public class GraphicsAdapterTests
         var pdfPage = pdfDocument.AddPage();
 
         using var gfx = XGraphics.FromPdfPage(pdfPage);
-        using var adapter = new PDFGraphicsAdapter(gfx, new XSize(0, 0));
+        using var adapter = new PDFGraphicsAdapter(gfx);
 
         // Create a simple green image using GDI+
         using var image = new Bitmap(200, 200);
@@ -123,7 +123,7 @@ public class GraphicsAdapterTests
         var pdfPage = pdfDocument.AddPage();
 
         using var gfx = XGraphics.FromPdfPage(pdfPage);
-        using var adapter = new PDFGraphicsAdapter(gfx, new XSize(0, 0));
+        using var adapter = new PDFGraphicsAdapter(gfx);
 
         Assert.True(adapter.IsVisible(new RectangleF(0, 0, 100, 100)));
         Assert.False(adapter.IsVisible(new RectangleF(-200, -200, 50, 50)));
@@ -151,7 +151,7 @@ public class GraphicsAdapterTests
         var pdfPage = pdfDocument.AddPage();
 
         using var gfx = XGraphics.FromPdfPage(pdfPage);
-        using var adapter = new PDFGraphicsAdapter(gfx, new XSize(0, 0));
+        using var adapter = new PDFGraphicsAdapter(gfx);
 
         adapter.FillRegion(Brushes.Red, region);
 
@@ -168,7 +168,7 @@ public class GraphicsAdapterTests
         var pdfPage = pdfDocument.AddPage();
 
         using var gfx = XGraphics.FromPdfPage(pdfPage);
-        using var adapter = new PDFGraphicsAdapter(gfx, new XSize(0, 0));
+        using var adapter = new PDFGraphicsAdapter(gfx);
 
         var font = new Font("Arial", 16);
         var layout = new RectangleF(20, 20, 130, 130);
@@ -199,6 +199,33 @@ public class GraphicsAdapterTests
         Assert.Equal(45, boundingBox.Y);
         Assert.Equal(18, boundingBox.Width);
         Assert.Equal(24, boundingBox.Height);
+    }
+
+    [Fact]
+    public void TestMeasureStringGdi()
+    {
+        using var pdfDocument = new PdfDocument();
+        var pdfPage = pdfDocument.AddPage();
+
+        using var gfx = XGraphics.FromPdfPage(pdfPage);
+        using var adapter = new PDFGraphicsAdapter(gfx);
+
+        var font = new Font("Arial", 14);
+
+        // With this layout the string should be wrapped into 2 lines and
+        // only 24 characters should fit in the layout width
+        var layout = new SizeF(130, 46);
+
+        var format = new StringFormat
+        {
+            Alignment = StringAlignment.Near,
+            LineAlignment = StringAlignment.Near
+        };   
+
+        adapter.MeasureString("The quick, brown fox easily jumps over the lazy dog.", font, layout, format, out int charsFit, out int linesFit);
+
+        Assert.Equal(24, charsFit);
+        Assert.Equal(2, linesFit);
     }
 
 }

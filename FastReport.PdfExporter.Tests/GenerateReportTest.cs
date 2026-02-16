@@ -62,4 +62,21 @@ public class GenerateReportTest
 
         Assert.True(File.Exists(OutputPath));
     }
+
+    [Fact]
+    public void Test_ExportBackgroundAndBorders()
+    {
+        using var report = new Report();
+        using var pdfExport = new PDFExport();
+
+        report.Load("Reports/BackgroundReport.frx");
+
+        var OutputPath = Path.Combine(Path.GetTempPath(), "BackgroundReport.pdf");
+
+        Assert.True(report.Prepare(), "Cannot prepare the report");
+
+        report.Export(pdfExport, OutputPath);
+
+        Assert.True(File.Exists(OutputPath));
+    }
 }
