@@ -9,8 +9,8 @@ public class GenerateReportTest
 {
 
     [Fact]
-    public void Test_ExportReportFromCode()
-    {
+    public void TestExportReportFromCode()
+    {   
         using var report = new Report();
         using var pdfExport = new PDFExport();
 
@@ -47,7 +47,7 @@ public class GenerateReportTest
     }
 
     [Fact]
-    public void Test_ExportAdvancedReport()
+    public void TestExportAdvancedReport()
     {
         using var report = new Report();
         using var pdfExport = new PDFExport();
@@ -56,15 +56,15 @@ public class GenerateReportTest
 
         var OutputPath = Path.Combine(Path.GetTempPath(), "AdvancedReport.pdf");
 
-        Assert.True(report.Prepare(), "Cannot prepare the report");
-               
-        report.Export(pdfExport, OutputPath);      
+        Assert.True(report.Prepare(), "Cannot prepare the report");               
+  
+        report.Export(pdfExport, OutputPath);
 
         Assert.True(File.Exists(OutputPath));
     }
 
     [Fact]
-    public void Test_ExportBackgroundAndBorders()
+    public void TestExportBackgroundAndBorders()
     {
         using var report = new Report();
         using var pdfExport = new PDFExport();

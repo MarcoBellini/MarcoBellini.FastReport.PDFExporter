@@ -1,4 +1,5 @@
 ﻿using FastReport.Utils;
+using PdfSharp;
 using PdfSharp.Drawing;
 using PdfSharp.Pdf;
 using System.Drawing;
@@ -7,14 +8,12 @@ namespace FastReport.Export.PdfExporter;
 
 public partial class PDFExport : ExportBase
 {
-    
     private PdfDocument? pdfDocument;
     private PdfPage? pdfPage;
     private PDFGraphicsAdapter? pdfAdapter;
 
     public PDFExport()
     {
-
     }
 
     /// <summary>
@@ -57,9 +56,9 @@ public partial class PDFExport : ExportBase
     {
         base.ExportPageBegin(reportPage);
 
-        CreatePdfPageAndAdapter(reportPage);   
-        
-        DrawPageBackground(reportPage);        
+        CreatePdfPageAndAdapter(reportPage);
+
+        DrawPageBackground(reportPage);
         DrawBottomWatermark(reportPage);
 
         AddPageMarginsToAdapter(reportPage);
@@ -72,32 +71,27 @@ public partial class PDFExport : ExportBase
 
         pdfPage = pdfDocument.AddPage();
 
-        var pageWidth = ExportUtils.GetPageWidth(reportPage);
-        var pageHeight = ExportUtils.GetPageHeight(reportPage);
+        var pageSizeMm = GetPageSizeInMm(reportPage);
 
-        pdfPage.Width = XUnit.FromPoint(PdfUtils.MmToPoints(pageWidth));
-        pdfPage.Height = XUnit.FromPoint(PdfUtils.MmToPoints(pageHeight));
+        pdfPage.Width = XUnit.FromPoint(PdfUtils.MmToPoints(pageSizeMm.Width));
+        pdfPage.Height = XUnit.FromPoint(PdfUtils.MmToPoints(pageSizeMm.Height));
 
         pdfAdapter = new PDFGraphicsAdapter(XGraphics.FromPdfPage(pdfPage));
     }
 
     private void DrawPageBackground(ReportPage reportPage)
     {
-        using var pageFill = new TextObject();
+        using var backgroundObject = new TextObject();
 
-        var pageWidth = ExportUtils.GetPageWidth(reportPage);
-        var pageHeight = ExportUtils.GetPageHeight(reportPage);
+        var pageSizePx = GetPageSizeInPixels(reportPage);
 
-        pageWidth = Convert.ToSingle(PdfUtils.MmToPixel(pageWidth));
-        pageHeight = Convert.ToSingle(PdfUtils.MmToPixel(pageHeight));
+        backgroundObject.Fill = reportPage.Fill;
+        backgroundObject.Left = 0;
+        backgroundObject.Top = 0;
+        backgroundObject.Width = pageSizePx.Width;
+        backgroundObject.Height = pageSizePx.Height;
 
-        pageFill.Fill = reportPage.Fill;
-        pageFill.Left = 0;
-        pageFill.Top = 0;
-        pageFill.Width = pageWidth;
-        pageFill.Height = pageHeight;
-
-        pageFill.Draw(new FRPaintEventArgs(pdfAdapter, 1.0f, 1.0f, Report.GraphicCache));
+        backgroundObject.Draw(CreatePaintArgs());
     }
 
     private void DrawBottomWatermark(ReportPage reportPage)
@@ -111,10 +105,10 @@ public partial class PDFExport : ExportBase
 
     private void AddPageMarginsToAdapter(ReportPage reportPage)
     {
-        var LeftMargin = PdfUtils.MmToPixel(reportPage.LeftMargin);
-        var TopMargin = PdfUtils.MmToPixel(reportPage.TopMargin);
+        var leftMarginPx = (float)PdfUtils.MmToPixel(reportPage.LeftMargin);
+        var topMarginPx = (float)PdfUtils.MmToPixel(reportPage.TopMargin);
 
-        pdfAdapter?.TranslateTransform(Convert.ToSingle(LeftMargin), Convert.ToSingle(TopMargin));
+        pdfAdapter?.TranslateTransform(leftMarginPx, topMarginPx);
     }
 
     /// <summary>
@@ -128,40 +122,37 @@ public partial class PDFExport : ExportBase
         if (pdfAdapter is null)
             throw new NullReferenceException($"{nameof(pdfAdapter)} is not initialized");
 
-      
-        DrawPageBorders(reportPage);       
+        DrawPageBorders(reportPage);
         RemoveMarginsFromAdapter(reportPage);
         DrawTopWatermark(reportPage);
 
-        ClosePdfDapter();
+        ClosePdfAdapter();
     }
+
     private void DrawPageBorders(ReportPage reportPage)
     {
         if (reportPage.Border.Lines == BorderLines.None)
             return;
 
-        using var pageBorder = new TextObject();
+        using var borderObject = new TextObject();
 
-        var borderRectWidth = ExportUtils.GetPageWidth(reportPage) - reportPage.LeftMargin - reportPage.RightMargin;
-        var borderRectHeight = ExportUtils.GetPageHeight(reportPage) - reportPage.TopMargin - reportPage.BottomMargin;
+        var contentAreaSizePx = GetContentAreaSizeInPixels(reportPage);
 
-        borderRectWidth = Convert.ToSingle(PdfUtils.MmToPixel(borderRectWidth));
-        borderRectHeight = Convert.ToSingle(PdfUtils.MmToPixel(borderRectHeight));
+        borderObject.Border = reportPage.Border;
+        borderObject.Left = 0;
+        borderObject.Top = 0;
+        borderObject.Width = contentAreaSizePx.Width;
+        borderObject.Height = contentAreaSizePx.Height;
 
-        pageBorder.Border = reportPage.Border;
-        pageBorder.Left = 0;
-        pageBorder.Top = 0;
-        pageBorder.Width = borderRectWidth;
-        pageBorder.Height = borderRectHeight;
-
-        pageBorder.Draw(new FRPaintEventArgs(pdfAdapter, 1.0f, 1.0f, Report.GraphicCache));
+        borderObject.Draw(CreatePaintArgs());
     }
+
     private void RemoveMarginsFromAdapter(ReportPage reportPage)
     {
-        var leftMargin = PdfUtils.MmToPixel(reportPage.LeftMargin);
-        var topMargin = PdfUtils.MmToPixel(reportPage.TopMargin);
+        var leftMarginPx = (float)PdfUtils.MmToPixel(reportPage.LeftMargin);
+        var topMarginPx = (float)PdfUtils.MmToPixel(reportPage.TopMargin);
 
-        pdfAdapter?.TranslateTransform(-Convert.ToSingle(leftMargin), -Convert.ToSingle(topMargin));
+        pdfAdapter?.TranslateTransform(-leftMarginPx, -topMarginPx);
     }
 
     private void DrawTopWatermark(ReportPage reportPage)
@@ -173,7 +164,7 @@ public partial class PDFExport : ExportBase
             AddTextWatermark(reportPage);
     }
 
-    private void ClosePdfDapter()
+    private void ClosePdfAdapter()
     {
         pdfAdapter?.Dispose();
     }
@@ -181,7 +172,7 @@ public partial class PDFExport : ExportBase
     /// <summary>
     /// This method is called for each band on exported reportPage.
     /// </summary>
-    /// <param name="band">Band, dispose after method compite.</param>
+    /// <param name="band">Band, dispose after method completes.</param>
     protected override void ExportBand(BandBase band)
     {
         base.ExportBand(band);
@@ -189,32 +180,27 @@ public partial class PDFExport : ExportBase
         if (pdfAdapter is null)
             throw new NullReferenceException($"{nameof(pdfAdapter)} is not initialized");
 
-        // Draw the band background
         DrawBandBackground(band);
-
-        // Draw band objects
         DrawBandObjects(band);
     }
 
     private void DrawBandBackground(BandBase band)
     {
-        band.Draw(new FRPaintEventArgs(pdfAdapter, 1.0f, 1.0f, Report.GraphicCache));
+        band.Draw(CreatePaintArgs());
     }
 
     private void DrawBandObjects(BandBase band)
     {
         foreach (Base c in band.ForEachAllConvectedObjects(this))
         {
-            // Skip tables objects
+            // Skip table sub-objects
             if (c is Table.TableColumn || c is Table.TableCell || c is Table.TableRow)
                 continue;
 
-            var obj = c as ReportComponentBase;
-
-            if ((obj is null) || (obj.Exportable == false))
+            if (c is not ReportComponentBase obj || !obj.Exportable)
                 continue;
 
-            obj.Draw(new FRPaintEventArgs(pdfAdapter, 1.0f, 1.0f, Report.GraphicCache));
+            obj.Draw(CreatePaintArgs());
         }
     }
 
@@ -224,7 +210,7 @@ public partial class PDFExport : ExportBase
     protected override void Finish()
     {
         base.Finish();
-       
+
         SaveAndCloseDocument();
     }
 
@@ -239,49 +225,80 @@ public partial class PDFExport : ExportBase
 
     /// <summary>
     /// Add Image Watermark to reportPage
-    /// </summary>  
+    /// </summary>
     private void AddImageWatermark(ReportPage reportPage)
     {
         if (pdfAdapter is null)
             throw new NullReferenceException($"{nameof(pdfAdapter)} is not initialized");
 
-        var pageWidth = ExportUtils.GetPageWidth(reportPage);
-        var pageHeight = ExportUtils.GetPageHeight(reportPage);
+        var watermarkRect = GetWatermarkLayoytRect(reportPage);
 
-        pageWidth = Convert.ToSingle(PdfUtils.MmToPixel(pageWidth));
-        pageHeight = Convert.ToSingle(PdfUtils.MmToPixel(pageHeight));
-
-        var layoutRect = new RectangleF(0, 0, pageWidth, pageHeight);
-
-        reportPage.Watermark.DrawImage(new FRPaintEventArgs(pdfAdapter, 1.0f, 1.0f, Report.GraphicCache),
-                                        layoutRect,
-                                        reportPage.Report, 
-                                        false);        
+        reportPage.Watermark.DrawImage(CreatePaintArgs(), watermarkRect, reportPage.Report, false);
     }
 
     /// <summary>
     /// Add Text Watermark to reportPage
     /// </summary>
     private void AddTextWatermark(ReportPage reportPage)
-    {      
+    {
         if (pdfAdapter is null)
             throw new NullReferenceException($"{nameof(pdfAdapter)} is not initialized");
 
         if (string.IsNullOrEmpty(reportPage.Watermark.Text))
             return;
 
-        var pageWidth = ExportUtils.GetPageWidth(reportPage);
-        var pageHeight = ExportUtils.GetPageHeight(reportPage);
+        var watermarkRect = GetWatermarkLayoytRect(reportPage);
 
-        pageWidth = Convert.ToSingle(PdfUtils.MmToPixel(pageWidth));
-        pageHeight = Convert.ToSingle(PdfUtils.MmToPixel(pageHeight));
-
-        var layoutRect = new RectangleF(0, 0, pageWidth, pageHeight);
-
-        reportPage.Watermark.DrawText(new FRPaintEventArgs(pdfAdapter, 1.0f, 1.0f, Report.GraphicCache),
-                                        layoutRect,
-                                        reportPage.Report,
-                                        false);
+        reportPage.Watermark.DrawText(CreatePaintArgs(), watermarkRect, reportPage.Report, false);
     }
+
+    /// <summary>
+    /// Creates a <see cref="FRPaintEventArgs"/> using the current adapter and report cache.
+    /// </summary>
+    private FRPaintEventArgs CreatePaintArgs() =>
+        new(pdfAdapter, 1.0f, 1.0f, Report.GraphicCache);
+
+    /// <summary>
+    /// Returns the watermark layout rectangle in pixels.
+    /// </summary>
+    private static RectangleF GetWatermarkLayoytRect(ReportPage reportPage)
+    {
+        var pageSizePx = GetPageSizeInPixels(reportPage);
+
+        return new RectangleF(0, 0, pageSizePx.Width, pageSizePx.Height);
+    }
+
+    /// <summary>
+    /// Returns the content area size (page minus margins) in pixels.
+    /// </summary>
+    private static SizeF GetContentAreaSizeInPixels(ReportPage reportPage)
+    {
+        var pageSizeMm = GetPageSizeInMm(reportPage);
+        var widthMm = pageSizeMm.Width - reportPage.LeftMargin - reportPage.RightMargin;
+        var heightMm = pageSizeMm.Height - reportPage.TopMargin - reportPage.BottomMargin;
+
+        return new(
+            (float)PdfUtils.MmToPixel(widthMm),
+            (float)PdfUtils.MmToPixel(heightMm));
+    }
+
+    /// <summary>
+    /// Returns the full page size in pixels.
+    /// </summary>
+    private static SizeF GetPageSizeInPixels(ReportPage reportPage)
+    {
+        var pageSizeMm = GetPageSizeInMm(reportPage);
+
+        return new(
+            (float)PdfUtils.MmToPixel(pageSizeMm.Width),
+            (float)PdfUtils.MmToPixel(pageSizeMm.Height));
+    }
+
+    /// <summary>
+    /// Returns the page size in millimeters.
+    /// </summary>
+    private static SizeF GetPageSizeInMm(ReportPage reportPage) =>
+        new(ExportUtils.GetPageWidth(reportPage),
+            ExportUtils.GetPageHeight(reportPage));
 }
 

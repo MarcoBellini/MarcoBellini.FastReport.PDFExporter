@@ -16,11 +16,10 @@ internal class PDFBrushFactoryImpl : PDFBrushFactory
                 return CreateSolidBrush(brush);
             
             case LinearGradientBrush:
-                return CreateLinearGradientBrush(brush);
+                return CreateLinearGradientBrush(brush);             
               
             default:
-                //throw new NotSupportedException($"Brush of type {brush.GetType().FullName} is not supported.");
-                return CreateFallbackBrush();               
+                throw new NotSupportedException($"Brush of type {brush.GetType().FullName} is not supported.");                          
         }
     }
 
@@ -55,8 +54,4 @@ internal class PDFBrushFactoryImpl : PDFBrushFactory
         return linearGradientBrush;
     }
 
-    private static XBrush CreateFallbackBrush()
-    {
-        return new XSolidBrush(XColors.Black);
-    }
 }

@@ -31,7 +31,7 @@ internal class PDFGraphicsAdapter : IGraphics
                 (float)m.M11, 
                 (float)m.M12, 
                 (float)m.M21, 
-                (float)m.M21, 
+                (float)m.M22, 
                 (float)PdfUtils.PointsToPixel(m.OffsetX), 
                 (float)PdfUtils.PointsToPixel(m.OffsetY));
 
@@ -204,8 +204,8 @@ internal class PDFGraphicsAdapter : IGraphics
             throw new ArgumentException("Points array must contain exactly 3 points for parallelogram transformation.");
 
         // Switch to GDI+ to draw image to parallelogram
-        var bitmap = new Bitmap(image.Width, image.Height);
-        var gfx = Graphics.FromImage(bitmap);
+        using var bitmap = new Bitmap(image.Width, image.Height);
+        using var gfx = Graphics.FromImage(bitmap);
     
         gfx.DrawImage(image, points);       
 
@@ -219,13 +219,16 @@ internal class PDFGraphicsAdapter : IGraphics
     /// </summary>
     internal static RectangleF GetBoundingBox(PointF[] points)
     {       
-        var x = points.Min(p => p.X);
-        var y = points.Min(p => p.Y);
+        var minX = points.Min(p => p.X);
+        var minY = points.Min(p => p.Y);
 
-        var width = points.Max(p => p.X);
-        var height = points.Max(p => p.Y);
+        var maxX = points.Max(p => p.X);
+        var maxY = points.Max(p => p.Y);
 
-        return new RectangleF(x, y, width, height); 
+        var width = maxX - minX;
+        var height = maxY - minY;
+
+        return new RectangleF(minX, minY, width, height); 
     }
 
     public void DrawImage(System.Drawing.Image image, Rectangle destRect, int srcX, int srcY, int srcWidth, int srcHeight, GraphicsUnit srcUnit, ImageAttributes imageAttr)
@@ -496,8 +499,8 @@ internal class PDFGraphicsAdapter : IGraphics
     {
         var boundingBox = GetRegionBoundingBox(region);
 
-        var bitmap = new Bitmap(boundingBox.Width, boundingBox.Height);
-        var gfx = Graphics.FromImage(bitmap);
+        using var bitmap = new Bitmap(boundingBox.Width, boundingBox.Height);
+        using var gfx = Graphics.FromImage(bitmap);
 
         gfx.FillRegion(brush, region);
 
@@ -526,8 +529,8 @@ internal class PDFGraphicsAdapter : IGraphics
 
     public Region[] MeasureCharacterRanges(string text, Font font, RectangleF textRect, StringFormat format)
     {
-        var bitmap = new Bitmap(Convert.ToInt32(textRect.Width), Convert.ToInt32(textRect.Height));
-        var gfx = Graphics.FromImage(bitmap);
+        using var bitmap = new Bitmap(Convert.ToInt32(textRect.Width), Convert.ToInt32(textRect.Height));
+        using var gfx = Graphics.FromImage(bitmap);
 
         return gfx.MeasureCharacterRanges(text, font, textRect, format);       
     }
@@ -573,8 +576,8 @@ internal class PDFGraphicsAdapter : IGraphics
 
     public void MeasureString(string text, Font font, SizeF size, StringFormat format, out int charsFit, out int linesFit)
     {
-        var bitmap = new Bitmap(Convert.ToInt32(size.Width), Convert.ToInt32(size.Height));
-        var gfx = Graphics.FromImage(bitmap);
+        using var bitmap = new Bitmap(Convert.ToInt32(size.Width), Convert.ToInt32(size.Height));
+        using var gfx = Graphics.FromImage(bitmap);
 
         gfx.MeasureString(text, font, size, format, out charsFit, out linesFit);
     }
@@ -623,35 +626,70 @@ internal class PDFGraphicsAdapter : IGraphics
 
     public void ScaleTransform(float scaleX, float scaleY)
     {       
-        pdfGfx.ScaleTransform(PdfUtils.PixelToPoints(scaleX),
-                            PdfUtils.PixelToPoints(scaleY));          
+        pdfGfx.ScaleTransform(scaleX,
+                              scaleY);          
     }
 
     public void SetClip(RectangleF rect)
-    {       
-        pdfGfx.IntersectClip(rect);
+    {
+        var rc = new XRect(PdfUtils.PixelToPoints(rect.Left),
+                   PdfUtils.PixelToPoints(rect.Top),
+                   PdfUtils.PixelToPoints(rect.Width),
+                   PdfUtils.PixelToPoints(rect.Height));
+
+        pdfGfx.IntersectClip(rc);
     }
 
     public void SetClip(RectangleF rect, CombineMode combineMode)
-    {        
-        pdfGfx.IntersectClip(rect);    
+    {
+        switch (combineMode)
+        {
+            case CombineMode.Replace:
+                ResetClip();
+                SetClip(rect);
+                break;
+            case CombineMode.Intersect:
+                SetClip(rect);
+                break;
+            default:
+                throw new NotSupportedException("Only Intersect / Replace combine mode is supported for clipping");
+        }           
     }
 
     public void SetClip(GraphicsPath path, CombineMode combineMode)
-    {        
+    {
+        switch (combineMode)
+        {
+            case CombineMode.Replace:
+                SetGraphicsPathClip(path);
+                ResetClip();
+                break;
+            case CombineMode.Intersect:
+                SetGraphicsPathClip(path);
+                break;
+            default:
+                throw new NotSupportedException("Only Intersect / Replace combine mode is supported for clipping");
+        }    
+    }
+
+    /// <summary>
+    /// Use Gdi GraphicsPath to set clipping region.
+    /// </summary>
+    private void SetGraphicsPathClip(GraphicsPath path)
+    {
         var xGraphicsPath = PdfUtils.XGraphicsPathFromGdiPath(path);
-  
-        pdfGfx.IntersectClip(xGraphicsPath);           
+
+        pdfGfx.IntersectClip(xGraphicsPath);
     }
 
     public void TranslateTransform(float left, float top)
     {        
         pdfGfx.TranslateTransform(PdfUtils.PixelToPoints(left),
-                                PdfUtils.PixelToPoints(top));       
+                                  PdfUtils.PixelToPoints(top));       
     }
 
     /// <summary>
-    /// Resize source rectangle Y coordinate and height to align text vertically in the rectangle 
+    /// Resize source rectangle Y coordinate and maxY to align text vertically in the rectangle 
     /// according to StringFormat.LineAlignment property. 
     /// 
     /// This is needed because PdfSharp does not support vertical alignment of text.
@@ -684,7 +722,7 @@ internal class PDFGraphicsAdapter : IGraphics
     }
 
     /// <summary>
-    /// Returns text with added line breaks to fit the text within the specified rectangle width.
+    /// Returns text with added line breaks to fit the text within the specified rectangle maxX.
     /// </summary>
     /// <param name="text">Text to prepare</param>
     /// <param name="font"><c>XFont</c> object used to draw text</param>
@@ -712,7 +750,7 @@ internal class PDFGraphicsAdapter : IGraphics
     }
 
     /// <summary>
-    /// Check if the word is wider than the specified width when drawn with the specified font.
+    /// Check if the word is wider than the specified maxX when drawn with the specified font.
     /// </summary>
     private bool IsWordWiderThanRect(string word, XFont font, double maxWidth)
     {
@@ -721,7 +759,7 @@ internal class PDFGraphicsAdapter : IGraphics
 
     /// <summary>
     /// Split the word into multiple lines by adding line breaks so that each line fits within the 
-    /// specified width when drawn with the specified font.
+    /// specified maxX when drawn with the specified font.
     /// </summary>
     private string SplitWordToFitWidth(string word, XFont font, double maxWidth)
     {

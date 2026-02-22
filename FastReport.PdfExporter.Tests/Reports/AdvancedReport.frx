@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Report ScriptLanguage="CSharp" TextQuality="AntiAlias" SmoothGraphics="true" ReportInfo.Name="Advanced Report" ReportInfo.Author="Marco Bellini" ReportInfo.Version="1.0" ReportInfo.Description="Test PDFSharp export capabilites" ReportInfo.Created="01/31/2026 21:01:41" ReportInfo.Modified="02/01/2026 19:35:07" ReportInfo.CreatorVersion="2025.1.0.0">
+<Report ScriptLanguage="CSharp" TextQuality="AntiAlias" SmoothGraphics="true" ReportInfo.Name="Advanced Report" ReportInfo.Author="Marco Bellini" ReportInfo.Version="1.0" ReportInfo.Description="Test PDFSharp export capabilites" ReportInfo.Created="01/31/2026 21:01:41" ReportInfo.Modified="02/22/2026 17:26:09" ReportInfo.CreatorVersion="2025.1.0.0">
   <Dictionary/>
   <ReportPage Name="Page1" RawPaperSize="9" Watermark.Enabled="true" Watermark.Text="ORIGINAL" Watermark.Font="Arial, 60pt" Watermark.ShowTextOnTop="false">
     <ReportTitleBand Name="ReportTitle1" Width="718.2" Height="103.95">
@@ -31,11 +31,10 @@
       <TextObject Name="Text7" Left="226.8" Top="264.6" Width="207.9" Height="18.9" Text="This color is RED and Bold" Font="Arial, 10pt, style=Bold" TextFill.Color="Red"/>
       <TextObject Name="Text8" Left="226.8" Top="292.95" Width="207.9" Height="37.8" Border.Lines="All" Text="This is a Paragraph. Lorem Ipsum dolor sit amet." HorzAlign="Center" VertAlign="Bottom" Font="Arial, 6.75pt"/>
       <ShapeObject Name="Shape3" Left="481.95" Top="245.7" Width="94.5" Height="18.9" Fill.Color="Gold"/>
-      <ShapeObject Name="Shape4" Left="481.95" Top="274.05" Width="94.5" Height="18.9" Fill="LinearGradient" Fill.StartColor="Brown" Fill.EndColor="Lime" Fill.Angle="0" Fill.Focus="1" Fill.Contrast="1"/>
+      <ShapeObject Name="Shape4" Left="481.95" Top="283.5" Width="94.5" Height="18.9" Fill="LinearGradient" Fill.StartColor="Brown" Fill.EndColor="Lime" Fill.Angle="0" Fill.Focus="1" Fill.Contrast="1"/>
       <TextObject Name="Text9" Left="576.45" Top="245.7" Width="122.85" Height="18.9" Text="Solid Color" Font="Arial, 7pt"/>
-      <TextObject Name="Text10" Left="576.45" Top="274.05" Width="122.85" Height="18.9" Text="LinearGradient" Font="Arial, 7pt"/>
-      <ShapeObject Name="Shape5" Left="481.95" Top="302.4" Width="94.5" Height="18.9" Fill="PathGradient" Fill.CenterColor="Yellow" Fill.EdgeColor="Sienna" Fill.Style="Elliptic"/>
-      <TextObject Name="Text11" Left="576.45" Top="302.4" Width="122.85" Height="18.9" Text="PathGradient = Fallback Gradient" Font="Arial, 7pt"/>
+      <TextObject Name="Text10" Left="576.45" Top="283.5" Width="122.85" Height="18.9" Text="LinearGradient" Font="Arial, 7pt"/>
+      <TextObject Name="Text11" Left="481.95" Top="311.85" Width="217.35" Height="28.35" Fill.Color="255, 255, 0" Text="WARNING: Path Gradient, Hatch, Glass and Texture brusches are not supported!" Font="Arial, 7pt, style=Bold"/>
     </PageHeaderBand>
     <DataBand Name="Data1" Top="458.93" Width="718.2" Height="47.25"/>
     <PageFooterBand Name="PageFooter1" Top="508.85" Width="718.2" Height="18.9">

@@ -273,7 +273,7 @@ internal static class PdfUtils
         if (font.Underline)
             style |= XFontStyleEx.Underline;
 
-        if (font.Underline)
+        if (font.Strikeout)
             style |= XFontStyleEx.Strikeout;
 
         return new XFont(font.Name, font.Size, style);

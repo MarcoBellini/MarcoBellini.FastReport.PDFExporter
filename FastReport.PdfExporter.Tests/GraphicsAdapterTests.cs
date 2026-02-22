@@ -1,7 +1,8 @@
-﻿using PdfSharp.Drawing;
+﻿using FastReport.Export.PdfExporter;
+using PdfSharp.Drawing;
 using PdfSharp.Pdf;
-using FastReport.Export.PdfExporter;
 using System.Drawing;
+using System.Runtime.InteropServices;
 
 namespace FastReport.PdfExporter.Tests;
 
@@ -75,8 +76,8 @@ public class GraphicsAdapterTests
 
         Assert.Equal(25, box.X);
         Assert.Equal(10, box.Y);
-        Assert.Equal(170, box.Width);
-        Assert.Equal(195, box.Height);
+        Assert.Equal(145, box.Width);
+        Assert.Equal(185, box.Height);
     }
 
     [Fact]
@@ -226,6 +227,24 @@ public class GraphicsAdapterTests
 
         Assert.Equal(24, charsFit);
         Assert.Equal(2, linesFit);
+    }
+
+    [Fact]
+    public void TestMeasureString()
+    {
+        using var pdfDocument = new PdfDocument();
+        var pdfPage = pdfDocument.AddPage();
+
+        using var gfx = XGraphics.FromPdfPage(pdfPage);
+        using var adapter = new PDFGraphicsAdapter(gfx);
+
+        var font = new Font("Arial", 12);
+
+        var size = adapter.MeasureString("Melodic rain bounces off the roof top", font);
+
+        Assert.InRange(size.Width, 258.8, 258.9);
+        Assert.InRange(size.Height, 17.8, 17.9);
+   
     }
 
 }
