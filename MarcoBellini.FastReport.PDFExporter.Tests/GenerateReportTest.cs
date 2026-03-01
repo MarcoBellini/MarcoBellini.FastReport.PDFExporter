@@ -1,9 +1,9 @@
 ﻿
-using FastReport.Export.PdfExporter;
+using FastReport;
 using System.Drawing;
 using FastReport.Utils;
 
-namespace FastReport.PdfExporter.Tests;
+namespace MarcoBellini.FastReport.PDFExporter.Tests;
 
 public class GenerateReportTest
 {

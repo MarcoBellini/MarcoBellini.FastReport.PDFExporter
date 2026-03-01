@@ -1,16 +1,16 @@
-﻿namespace FastReport.PdfExporter.Tests;
-
-using FastReport.Export.PdfExporter;
+﻿
+namespace MarcoBellini.FastReport.PDFExporter.Tests;
 
 public class BaseTests
 {
     private const double Tolerance = 1e-9;
+    public static float Millimeters = 3.78f; // From FastReport.Utils.Units.Millimeters
 
 
     [Fact]
     public void TestPixelToPointConversionFactor()
     {
-        double factor = 1.0 / FastReport.Utils.Units.Millimeters * 72.0 / 25.4;
+        double factor = 1.0 / Millimeters * 72.0 / 25.4;
         Assert.InRange(factor, 0.74990, 0.7500);
     }
 

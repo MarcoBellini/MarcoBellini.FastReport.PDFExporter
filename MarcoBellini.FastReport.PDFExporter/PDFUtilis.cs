@@ -5,7 +5,7 @@ using System.Drawing.Drawing2D;
 using PdfSharp.Drawing.Layout;
 
 
-namespace FastReport.Export.PdfExporter;
+namespace MarcoBellini.FastReport.PDFExporter;
 
 
 internal static class PdfUtils

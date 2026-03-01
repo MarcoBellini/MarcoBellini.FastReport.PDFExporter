@@ -21,7 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\FastReport.Export.PdfSharpExport\FastReport.PdfExporter.csproj" />
+    <ProjectReference Include="..\MarcoBellini.FastReport.PDFExporter\MarcoBellini.FastReport.PDFExporter.csproj" />
   </ItemGroup>
 
   <ItemGroup>
