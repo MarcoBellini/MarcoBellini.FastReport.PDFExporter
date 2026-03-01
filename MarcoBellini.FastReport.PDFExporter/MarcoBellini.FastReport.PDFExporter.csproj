@@ -8,11 +8,11 @@
     <NuGetAuditMode>direct</NuGetAuditMode>
     <NuGetAudit>True</NuGetAudit>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-    <Title>FastReport.PdfExporter</Title>
+    <Title>MarcoBellini.FastReport.PDFExporter</Title>
     <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <Description>Improved PDF Exporter for FastReport OpenSource using PDFSharp</Description>
-    <RepositoryUrl>https://github.com/MarcoBellini/FastReport.PdfExporter</RepositoryUrl>
+    <RepositoryUrl>https://github.com/MarcoBellini/MarcoBellini.FastReport.PDFExporter</RepositoryUrl>
     <PackageTags>FastReport;PDF;Exporter</PackageTags>
     <Authors>MarcoBellini</Authors>
     <Version>2026.1.4</Version>

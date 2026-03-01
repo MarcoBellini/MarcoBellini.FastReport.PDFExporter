@@ -1,10 +1,12 @@
-﻿using FastReport.Utils;
-using PdfSharp;
+﻿using FastReport;
+using FastReport.Export;
+using FastReport.Table;
+using FastReport.Utils;
 using PdfSharp.Drawing;
 using PdfSharp.Pdf;
 using System.Drawing;
 
-namespace FastReport.Export.PdfExporter;
+namespace MarcoBellini.FastReport.PDFExporter;
 
 public partial class PDFExport : ExportBase
 {
@@ -194,7 +196,7 @@ public partial class PDFExport : ExportBase
         foreach (Base c in band.ForEachAllConvectedObjects(this))
         {
             // Skip table sub-objects
-            if (c is Table.TableColumn || c is Table.TableCell || c is Table.TableRow)
+            if (c is TableColumn || c is TableCell || c is TableRow)
                 continue;
 
             if (c is not ReportComponentBase obj || !obj.Exportable)

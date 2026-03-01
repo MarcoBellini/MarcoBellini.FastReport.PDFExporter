@@ -1,6 +1,7 @@
-﻿using PdfSharp.Drawing;
+﻿using FastReport;
+using PdfSharp.Drawing;
 
-namespace FastReport.Export.PdfExporter;
+namespace MarcoBellini.FastReport.PDFExporter;
 
 /// <summary>
 /// Class used to store PDFSharp graphics state.

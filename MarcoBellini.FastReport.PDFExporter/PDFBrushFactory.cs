@@ -1,7 +1,7 @@
 ﻿using PdfSharp.Drawing;
 using System.Drawing;
 
-namespace FastReport.Export.PdfExporter;
+namespace MarcoBellini.FastReport.PDFExporter;
 
 internal interface PDFBrushFactory
 {

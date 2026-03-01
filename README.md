@@ -1,6 +1,6 @@
-# FastReport.PdfExporter
+# MarcoBellini.FastReport.PDFExporter
 
-[![NuGet](https://img.shields.io/nuget/v/FastReport.PdfExporter.svg)](https://www.nuget.org/packages/FastReport.PdfExporter)
+[![NuGet](https://img.shields.io/nuget/v/MarcoBellini.FastReport.PDFExporter.svg)](https://www.nuget.org/packages/MarcoBellini.FastReport.PDFExporter)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform: Windows](https://img.shields.io/badge/platform-Windows-lightgrey.svg)]()
 
@@ -33,7 +33,7 @@ This project aims to improve PDF generation quality and reduce output file size 
 Install via NuGet Package Manager:
 
 ```shell
-dotnet add package FastReport.PdfExporter
+dotnet add package MarcoBellini.FastReport.PDFExporter
 ```
 ---
 
@@ -42,7 +42,7 @@ dotnet add package FastReport.PdfExporter
 ### Basic export to file
 
 ```csharp
-using FastReport.Export.PdfExporter;
+using MarcoBellini.FastReport.PDFExporter;
 
 void ExportReport()
 {
@@ -60,7 +60,7 @@ void ExportReport()
 ### Export to a memory stream (e.g. for ASP.NET Core responses)
 
 ```csharp
-using FastReport.Export.PdfExporter;
+using MarcoBellini.FastReport.PDFExporter;
 
 byte[] ExportReportToBytes()
 {
@@ -79,7 +79,7 @@ byte[] ExportReportToBytes()
 ### Export with data source
 
 ```csharp
-using FastReport.Export.PdfExporter;
+using MarcoBellini.FastReport.PDFExporter;
 
 void ExportReportWithData(IEnumerable<MyRecord> data)
 {

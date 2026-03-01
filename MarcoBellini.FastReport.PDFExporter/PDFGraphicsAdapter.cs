@@ -1,4 +1,5 @@
-﻿using PdfSharp.Drawing;
+﻿using FastReport;
+using PdfSharp.Drawing;
 using PdfSharp.Drawing.Layout;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -7,7 +8,7 @@ using System.Drawing.Text;
 using System.Text;
 
 
-namespace FastReport.Export.PdfExporter;
+namespace MarcoBellini.FastReport.PDFExporter;
 
 internal class PDFGraphicsAdapter : IGraphics
 {
@@ -22,12 +23,12 @@ internal class PDFGraphicsAdapter : IGraphics
     public TextRenderingHint TextRenderingHint { get; set; } = TextRenderingHint.SystemDefault;
     public InterpolationMode InterpolationMode { get; set; } = InterpolationMode.Default;
 
-    public System.Drawing.Drawing2D.Matrix Transform 
+    public Matrix Transform 
     {
         get
         {          
             var m = pdfGfx.Transform;
-            var xmatrix = new System.Drawing.Drawing2D.Matrix(
+            var xmatrix = new Matrix(
                 (float)m.M11, 
                 (float)m.M12, 
                 (float)m.M21, 

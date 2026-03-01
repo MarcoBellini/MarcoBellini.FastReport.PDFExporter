@@ -1,9 +1,9 @@
 ﻿using PdfSharp.Drawing;
 using System.Drawing;
 using System.Drawing.Drawing2D;
-using static FastReport.Export.PdfExporter.PdfUtils;
+using static MarcoBellini.FastReport.PDFExporter.PdfUtils;
 
-namespace FastReport.Export.PdfExporter;
+namespace MarcoBellini.FastReport.PDFExporter;
 
 internal class PDFBrushFactoryImpl : PDFBrushFactory
 {

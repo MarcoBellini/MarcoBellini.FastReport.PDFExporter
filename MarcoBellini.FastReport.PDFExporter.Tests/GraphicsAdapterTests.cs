@@ -1,10 +1,9 @@
-﻿using FastReport.Export.PdfExporter;
-using PdfSharp.Drawing;
+﻿using PdfSharp.Drawing;
 using PdfSharp.Pdf;
 using System.Drawing;
-using System.Runtime.InteropServices;
 
-namespace FastReport.PdfExporter.Tests;
+
+namespace MarcoBellini.FastReport.PDFExporter.Tests;
 
 public class GraphicsAdapterTests
 {
