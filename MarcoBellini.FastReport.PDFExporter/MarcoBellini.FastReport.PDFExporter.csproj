@@ -15,7 +15,7 @@
     <RepositoryUrl>https://github.com/MarcoBellini/MarcoBellini.FastReport.PDFExporter</RepositoryUrl>
     <PackageTags>FastReport;PDF;Exporter</PackageTags>
     <Authors>MarcoBellini</Authors>
-    <Version>2026.2.0</Version>
+    <Version>2026.2.1</Version>
     <RepositoryType>git</RepositoryType>
     <PackageRequireLicenseAcceptance>True</PackageRequireLicenseAcceptance>
     <PackageIcon>logo.png</PackageIcon>
@@ -38,7 +38,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="FastReport.OpenSource" Version="2026.2.0" />
+    <PackageReference Include="FastReport.OpenSource" Version="2026.2.1" />
     <PackageReference Include="PDFsharp-GDI" Version="6.2.4" />
   </ItemGroup>
 
