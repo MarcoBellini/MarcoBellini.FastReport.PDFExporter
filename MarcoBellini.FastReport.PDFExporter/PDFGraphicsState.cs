@@ -1,29 +1,11 @@
 ﻿using FastReport;
-using PdfSharp.Drawing;
 
 namespace MarcoBellini.FastReport.PDFExporter;
 
 /// <summary>
-/// Class used to store PDFSharp graphics state.
+/// Graphics state returned by <see cref="PDFGraphicsAdapter.Save"/>: the Skia save count to restore to.
 /// </summary>
-internal class PdfGraphicsState : IGraphicsState
+internal sealed class PdfGraphicsState(int saveCount) : IGraphicsState
 {
-
-    private XGraphicsState state;
-
-    /// <summary>
-    /// Create new PDFGraphicsState
-    /// </summary>
-    /// <param name="state">PDFSharp state returned from <c>save()</c></param>
-    public PdfGraphicsState(XGraphicsState state)
-    {
-        this.state = state;    
-    }
-
-    /// <summary>
-    /// Get Saved state
-    /// </summary>
-    public XGraphicsState GetState { get => state; }
-
-
+    public int SaveCount { get; } = saveCount;
 }
