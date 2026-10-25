@@ -1,786 +1,457 @@
 ﻿using FastReport;
-using PdfSharp.Drawing;
-using PdfSharp.Drawing.Layout;
+using MarcoBellini.FastReport.PDFExporter.Skia;
+using SkiaSharp;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Drawing.Text;
-using System.Text;
-
 
 namespace MarcoBellini.FastReport.PDFExporter;
 
-internal class PDFGraphicsAdapter : IGraphics
+/// <summary>
+/// FastReport <see cref="IGraphics"/> implementation that draws on a Skia PDF page canvas.
+/// All coordinates are FastReport pixels (96 DPI); the canvas base matrix converts them to PDF points.
+/// </summary>
+internal sealed class PDFGraphicsAdapter : IGraphics
 {
-    private const char SpaceChar = ' ';
+    private readonly SKCanvas canvas;
+    private readonly PdfRenderContext context;
+    private readonly CanvasStateManager state;
 
-    private XGraphics pdfGfx;
+    public PDFGraphicsAdapter(SKCanvas canvas, PdfRenderContext context)
+    {
+        ArgumentNullException.ThrowIfNull(canvas);
+        ArgumentNullException.ThrowIfNull(context);
 
-    public Graphics Graphics => throw new NotSupportedException("Cannot enter PDFSharp gdi object");   
-    public float DpiX => 96.0f;
-    public float DpiY => 96.0f;
-    public bool IsClipEmpty => true;         
+        this.canvas = canvas;
+        this.context = context;
+        state = new CanvasStateManager(canvas);
+    }
+
+    #region Properties
+
+    public Graphics Graphics => throw new NotSupportedException("A GDI+ Graphics object is not available for PDF output.");
+
+    public float DpiX => PageUnits.PixelsPerInch;
+
+    public float DpiY => PageUnits.PixelsPerInch;
+
+    public bool IsClipEmpty => canvas.IsClipEmpty;
+
     public TextRenderingHint TextRenderingHint { get; set; } = TextRenderingHint.SystemDefault;
+
     public InterpolationMode InterpolationMode { get; set; } = InterpolationMode.Default;
-
-    public Matrix Transform 
-    {
-        get
-        {          
-            var m = pdfGfx.Transform;
-            var xmatrix = new Matrix(
-                (float)m.M11, 
-                (float)m.M12, 
-                (float)m.M21, 
-                (float)m.M22, 
-                (float)PdfUtils.PointsToPixel(m.OffsetX), 
-                (float)PdfUtils.PointsToPixel(m.OffsetY));
-
-            return xmatrix;  
-        }
-        set
-        {
-            throw new NotSupportedException("Cannot Set Trasformation Matrix");
-        }
-    }
-
-
-    public GraphicsUnit PageUnit
-    {
-        get
-        {
-            return GraphicsUnit.Pixel;
-        }
-        set
-        {
-            if (value != GraphicsUnit.Pixel)                
-                throw new NotSupportedException("GraphicsUnit not supported");
-            
-        }
-    }
-
-    public Region Clip 
-    {
-        get 
-        {
-            throw new NotSupportedException("Cannot Get Clip Region");
-        }
-        set
-        {
-            throw new NotSupportedException("Cannot Set Clip Region");
-        }
-    } 
 
     public CompositingQuality CompositingQuality { get; set; } = CompositingQuality.Default;
 
-    public SmoothingMode SmoothingMode 
+    public SmoothingMode SmoothingMode { get; set; } = SmoothingMode.Default;
+
+    public Matrix Transform
     {
-        get
+        get => SkiaConvert.ToGdiMatrix(state.Transform);
+        set => state.Transform = SkiaConvert.ToSKMatrix(value);
+    }
+
+    public GraphicsUnit PageUnit
+    {
+        get => GraphicsUnit.Pixel;
+        set
         {
-            switch(pdfGfx.SmoothingMode)
-            {
-                case XSmoothingMode.Default:
-                    return SmoothingMode.Default;
-                case XSmoothingMode.AntiAlias:
-                    return SmoothingMode.AntiAlias;
-                case XSmoothingMode.HighQuality:
-                    return SmoothingMode.HighQuality;
-                case XSmoothingMode.None:
-                    return SmoothingMode.None;
-                case XSmoothingMode.Invalid:
-                    return SmoothingMode.Invalid;
-                case XSmoothingMode.HighSpeed:
-                    return SmoothingMode.HighSpeed;
-                default:
-                    return SmoothingMode.Default;
-            }
+            if (value != GraphicsUnit.Pixel)
+                throw new NotSupportedException($"GraphicsUnit '{value}' is not supported.");
         }
-        set 
-        {
-            switch(value)
-            {
-                case SmoothingMode.Default:
-                    pdfGfx.SmoothingMode = XSmoothingMode.Default;
-                    break;
-                case SmoothingMode.AntiAlias:
-                    pdfGfx.SmoothingMode = XSmoothingMode.AntiAlias;
-                    break;
-                case SmoothingMode.HighQuality:
-                    pdfGfx.SmoothingMode = XSmoothingMode.HighQuality;
-                    break;
-                case SmoothingMode.None:
-                    pdfGfx.SmoothingMode = XSmoothingMode.None;
-                    break;
-                case SmoothingMode.Invalid:
-                    pdfGfx.SmoothingMode = XSmoothingMode.Invalid;
-                    break;
-                case SmoothingMode.HighSpeed:
-                    pdfGfx.SmoothingMode = XSmoothingMode.HighSpeed;
-                    break;
-                default:
-                    throw new NotSupportedException("Smoothing Mode not supported");
-            }
-        } 
     }
 
-
-    public PDFGraphicsAdapter(XGraphics pageGraphics)
+    public Region Clip
     {
-        ArgumentNullException.ThrowIfNull(pageGraphics);
-
-        pdfGfx = pageGraphics;
+        get => new(SkiaConvert.ToRectangleF(canvas.LocalClipBounds));
+        set
+        {
+            using var path = PathConverter.FromRegion(value);
+            ApplyClip(path, CombineMode.Replace);
+        }
     }
+
+    #endregion
 
     public void Dispose()
     {
-       
+        state.RestorePage();
     }
 
+    #region Lines and outlines
+
     public void DrawArc(Pen pen, float x, float y, float width, float height, float startAngle, float sweepAngle)
-    {   
-        pdfGfx.DrawArc(PdfUtils.XPenFromGdiPen(pen),
-            PdfUtils.PixelToPoints(x),
-            PdfUtils.PixelToPoints(y),
-            PdfUtils.PixelToPoints(width),
-            PdfUtils.PixelToPoints(height),
-            startAngle, sweepAngle);
+    {
+        using var path = PathConverter.Arc(SKRect.Create(x, y, width, height), startAngle, sweepAngle);
+        DrawShape(path, pen, null);
     }
 
     public void DrawCurve(Pen pen, PointF[] points, int offset, int numberOfSegments, float tension)
-    {        
-        pdfGfx.DrawCurve(PdfUtils.XPenFromGdiPen(pen),
-            PdfUtils.XPointArrayFromGdiPointF(points),
-            offset, numberOfSegments, tension);
-    }
-
-    public void DrawEllipse(Pen pen, float left, float top, float width, float height)
     {
-        pdfGfx.DrawEllipse(PdfUtils.XPenFromGdiPen(pen),
-            PdfUtils.PixelToPoints(left),
-            PdfUtils.PixelToPoints(top),
-            PdfUtils.PixelToPoints(width),
-            PdfUtils.PixelToPoints(height));
+        using var path = PathConverter.Curve(points, offset, numberOfSegments, tension);
+        DrawShape(path, pen, null);
     }
 
-    public void DrawEllipse(Pen pen, RectangleF rect)
-    {       
-        DrawEllipse(pen, rect.X, rect.Y, rect.Width, rect.Height);
-    }
+    public void DrawEllipse(Pen pen, float left, float top, float width, float height) =>
+        FillAndDrawEllipse(pen, null, left, top, width, height);
 
-    public void DrawImage(System.Drawing.Image image, float x, float y)
-    {       
-        var img = XImage.FromGdiPlusImage(image);
-
-        pdfGfx.DrawImage(img, 
-            PdfUtils.PixelToPoints(x), 
-            PdfUtils.PixelToPoints(y));
-    }
-
-    public void DrawImage(System.Drawing.Image image, RectangleF src, RectangleF dst, GraphicsUnit srcUnit)
-    {        
-        var img = XImage.FromGdiPlusImage(image);
-        var sourceRect = PdfUtils.XRectFromGdiRect(src);
-        var destRect = PdfUtils.XRectFromGdiRect(dst);
-        var xGraphicsUnit = PdfUtils.GetXGraphicsUnitFromGdi(srcUnit);
-
-        pdfGfx.DrawImage(img, destRect, sourceRect, xGraphicsUnit);           
-    }
-
-    public void DrawImage(System.Drawing.Image image, RectangleF rect)
-    {      
-        var img = XImage.FromGdiPlusImage(image);
-        var destRect = PdfUtils.XRectFromGdiRect(rect);
-
-        pdfGfx.DrawImage(img, destRect);       
-    }
-
-    public void DrawImage(System.Drawing.Image image, float x, float y, float width, float height)
-    {
-        DrawImage(image, new RectangleF(x, y, width, height));
-    }
-
-    public void DrawImage(System.Drawing.Image image, PointF[] points)
-    {
-        if(points.Length != 3)
-            throw new ArgumentException("Points array must contain exactly 3 points for parallelogram transformation.");
-
-        // Switch to GDI+ to draw image to parallelogram
-        using var bitmap = new Bitmap(image.Width, image.Height);
-        using var gfx = Graphics.FromImage(bitmap);
-    
-        gfx.DrawImage(image, points);       
-
-        var boundingBox = GetBoundingBox(points);
-   
-        DrawImage(bitmap, boundingBox);
-    }
-
-    /// <summary>
-    /// Get the bounding box of the parallelogram defined by the specified points.
-    /// </summary>
-    internal static RectangleF GetBoundingBox(PointF[] points)
-    {       
-        var minX = points.Min(p => p.X);
-        var minY = points.Min(p => p.Y);
-
-        var maxX = points.Max(p => p.X);
-        var maxY = points.Max(p => p.Y);
-
-        var width = maxX - minX;
-        var height = maxY - minY;
-
-        return new RectangleF(minX, minY, width, height); 
-    }
-
-    public void DrawImage(System.Drawing.Image image, Rectangle destRect, int srcX, int srcY, int srcWidth, int srcHeight, GraphicsUnit srcUnit, ImageAttributes imageAttr)
-    {        
-        DrawImage(image, destRect, (float)srcX, (float)srcY, (float)srcWidth, (float)srcHeight, srcUnit, imageAttr);
-    }
-
-    public void DrawImage(System.Drawing.Image image, Rectangle destRect, float srcX, float srcY, float srcWidth, float srcHeight, GraphicsUnit srcUnit, ImageAttributes imageAttrs)
-    {
-        var img = XImage.FromGdiPlusImage(image);
-        var dest = PdfUtils.XRectFromGdiRect(destRect);
-        var unit = PdfUtils.GetXGraphicsUnitFromGdi(srcUnit);
-
-        var x = PdfUtils.PixelToPoints(srcX);
-        var y = PdfUtils.PixelToPoints(srcY);
-        var width = PdfUtils.PixelToPoints(srcWidth);
-        var height = PdfUtils.PixelToPoints(srcHeight);
-
-        var sourceRect = new XRect(x, y, width, height);
-
-        pdfGfx.DrawImage(img, dest, sourceRect, unit);          
-    }
-
-    public void DrawImageUnscaled(System.Drawing.Image image, Rectangle rect)
-    {        
-        var state = pdfGfx.Save();
-        var clipRect = PdfUtils.XRectFromGdiRect(rect);
-        var sourcePoint = new XPoint(clipRect.X, clipRect.Y);
-
-        pdfGfx.IntersectClip(clipRect);
-        pdfGfx.DrawImage(XImage.FromGdiPlusImage(image), sourcePoint);
-       
-        pdfGfx.Restore(state);
-    }
+    public void DrawEllipse(Pen pen, RectangleF rect) =>
+        FillAndDrawEllipse(pen, null, rect.X, rect.Y, rect.Width, rect.Height);
 
     public void DrawLine(Pen pen, float x1, float y1, float x2, float y2)
-    {     
-        var xPen = PdfUtils.XPenFromGdiPen(pen);
-
-        var x1d = PdfUtils.PixelToPoints(x1);
-        var y1d = PdfUtils.PixelToPoints(y1);
-        var x2d = PdfUtils.PixelToPoints(x2);
-        var y2d = PdfUtils.PixelToPoints(y2);
-
-        pdfGfx.DrawLine(xPen, x1d, y1d, x2d, y2d);         
-    }
-
-    public void DrawLine(Pen pen, PointF p1, PointF p2)
     {
-        DrawLine(pen, p1.X, p1.Y, p2.X, p2.Y);
+        using var paint = context.PaintFactory.CreateStroke(pen);
+        canvas.DrawLine(x1, y1, x2, y2, paint);
     }
+
+    public void DrawLine(Pen pen, PointF p1, PointF p2) => DrawLine(pen, p1.X, p1.Y, p2.X, p2.Y);
 
     public void DrawLines(Pen pen, PointF[] points)
     {
-        var xPointsArray = PdfUtils.XPointArrayFromGdiPointF(points);
-        var xPen = PdfUtils.XPenFromGdiPen(pen);
-
-        pdfGfx.DrawLines(xPen, xPointsArray);
+        using var path = PathConverter.Polygon(SkiaConvert.ToSKPoints(points), false);
+        DrawShape(path, pen, null);
     }
 
-    public void DrawPath(Pen outlinePen, GraphicsPath path)
-    {      
-        var xPen = PdfUtils.XPenFromGdiPen(outlinePen);
-        var xGraphicsPath = PdfUtils.XGraphicsPathFromGdiPath(path);
-
-        pdfGfx.DrawPath(xPen, xGraphicsPath);
-    }
+    public void DrawPath(Pen outlinePen, GraphicsPath path) => FillAndDrawPath(outlinePen, null, path);
 
     public void DrawPie(Pen pen, float x, float y, float width, float height, float startAngle, float sweepAngle)
     {
-        var xPen = PdfUtils.XPenFromGdiPen(pen);
-        var _x = PdfUtils.PixelToPoints(x);
-        var _y = PdfUtils.PixelToPoints(y);
-        var _w = PdfUtils.PixelToPoints(width);
-        var _h = PdfUtils.PixelToPoints(height);
-
-        pdfGfx.DrawPie(xPen, _x, _y, _w, _h, startAngle, sweepAngle);
+        using var path = PathConverter.Pie(SKRect.Create(x, y, width, height), startAngle, sweepAngle);
+        DrawShape(path, pen, null);
     }
 
-    public void DrawPolygon(Pen pen, PointF[] points)
+    public void DrawPolygon(Pen pen, PointF[] points) => FillAndDrawPolygon(pen, null, points);
+
+    public void DrawPolygon(Pen pen, Point[] points) => FillAndDrawPolygon(pen, null, points);
+
+    public void DrawRectangle(Pen pen, float left, float top, float width, float height) =>
+        FillAndDrawRectangle(pen, null, left, top, width, height);
+
+    public void DrawRectangle(Pen pen, Rectangle rectangle) =>
+        FillAndDrawRectangle(pen, null, rectangle.X, rectangle.Y, rectangle.Width, rectangle.Height);
+
+    #endregion
+
+    #region Fills
+
+    public void FillAndDrawEllipse(Pen pen, Brush brush, RectangleF rect) =>
+        FillAndDrawEllipse(pen, brush, rect.X, rect.Y, rect.Width, rect.Height);
+
+    public void FillAndDrawEllipse(Pen? pen, Brush? brush, float left, float top, float width, float height)
     {
-        var xPen = PdfUtils.XPenFromGdiPen(pen);
-        var xPointsArray = PdfUtils.XPointArrayFromGdiPointF(points);
-
-        pdfGfx.DrawPolygon(xPen, xPointsArray);
+        using var path = PathConverter.Ellipse(SKRect.Create(left, top, width, height));
+        DrawShape(path, pen, brush);
     }
 
-    public void DrawPolygon(Pen pen, Point[] points)
+    public void FillAndDrawPath(Pen? pen, Brush? brush, GraphicsPath path)
     {
-        var xPen = PdfUtils.XPenFromGdiPen(pen);
-        var xPointsArray = PdfUtils.XPointArrayFromGdiPoint(points);
-
-        pdfGfx.DrawPolygon(xPen, xPointsArray);
+        using var skPath = PathConverter.FromGraphicsPath(path);
+        DrawShape(skPath, pen, brush);
     }
 
-    public void DrawRectangle(Pen pen, float left, float top, float width, float height)
+    public void FillAndDrawPolygon(Pen? pen, Brush? brush, Point[] points)
     {
-        var xPen = PdfUtils.XPenFromGdiPen(pen);
-        var destRect = new XRect(PdfUtils.PixelToPoints(left),
-                           PdfUtils.PixelToPoints(top),
-                           PdfUtils.PixelToPoints(width),
-                           PdfUtils.PixelToPoints(height));
-
-        pdfGfx.DrawRectangle(xPen, destRect);
+        using var path = PathConverter.Polygon(SkiaConvert.ToSKPoints(points), true);
+        DrawShape(path, pen, brush);
     }
 
-    public void DrawRectangle(Pen pen, Rectangle rectangle)
+    public void FillAndDrawPolygon(Pen? pen, Brush? brush, PointF[] points)
     {
-        var xPen = PdfUtils.XPenFromGdiPen(pen);
-        var destRect = PdfUtils.XRectFromGdiRect(rectangle);
-
-        pdfGfx.DrawRectangle(xPen, destRect);
+        using var path = PathConverter.Polygon(SkiaConvert.ToSKPoints(points), true);
+        DrawShape(path, pen, brush);
     }
 
-    public void DrawString(string text, Font font, Brush brush, float left, float top)
+    public void FillAndDrawRectangle(Pen? pen, Brush? brush, float left, float top, float width, float height)
     {
-        DrawString(text, font, brush, left, top, StringFormat.GenericDefault);
+        using var path = PathConverter.Rectangle(SKRect.Create(left, top, width, height));
+        DrawShape(path, pen, brush);
     }
 
-    public void DrawString(string text, Font font, Brush brush, float left, float top, StringFormat format)
-    {
-        var xFont = PdfUtils.XFontFromGdiFont(font);
-        var xBrush = PdfUtils.XBrushFromGdiBrush(brush);
+    public void FillEllipse(Brush brush, float left, float top, float width, float height) =>
+        FillAndDrawEllipse(null, brush, left, top, width, height);
 
-        var x = PdfUtils.PixelToPoints(left);
-        var y = PdfUtils.PixelToPoints(top);
+    public void FillEllipse(Brush brush, RectangleF rect) =>
+        FillAndDrawEllipse(null, brush, rect.X, rect.Y, rect.Width, rect.Height);
 
-        var xStringFormat = PdfUtils.XStringFormatFromGdiFormat(format);
-
-        pdfGfx.DrawString(text, xFont, xBrush, x, y, xStringFormat);
-    }
-
-    public void DrawString(string text, Font font, Brush brush, RectangleF textRect)
-    {
-        DrawString(text, font, brush, textRect, StringFormat.GenericDefault);
-    }
-
-    public void DrawString(string text, Font font, Brush brush, RectangleF textRect, StringFormat format)
-    {       
-        var xFont = PdfUtils.XFontFromGdiFont(font);
-        var xBrush = PdfUtils.XBrushFromGdiBrush(brush);
-        var layoutRect = PdfUtils.XRectFromGdiRect(textRect);
-        var textFormatter = new XTextFormatter(pdfGfx);
-        var state = pdfGfx.Save();           
-
-        textFormatter.Alignment = PdfUtils.GetParagraphAlignment(format);
-
-        
-        var preparedText = GetTextWrappedToRectWidth(text, xFont, layoutRect);
-        var alignedRect = GetVerticallyAlignedRectForText(preparedText, xFont, format, layoutRect);
-
-        pdfGfx.IntersectClip(alignedRect);
-        textFormatter.DrawString(preparedText, xFont, xBrush, alignedRect);
-
-        pdfGfx.Restore(state); 
-    }
-
-    public void DrawString(string s, Font font, Brush brush, PointF point, StringFormat format)
-    {       
-        DrawString(s, font, brush, point.X, point.Y, format);
-    }
-
-    public void FillAndDrawEllipse(Pen pen, Brush brush, RectangleF rect)
-    {
-        FillEllipse(brush, rect);
-        DrawEllipse(pen, rect);
-    }
-
-    public void FillAndDrawEllipse(Pen pen, Brush brush, float left, float top, float width, float height)
-    {
-        FillEllipse(brush, left, top, width, height);
-        DrawEllipse(pen, left, top, width, height);
-    }
-
-    public void FillAndDrawPath(Pen pen, Brush brush, GraphicsPath path)
-    {
-        FillPath(brush, path);
-        DrawPath(pen, path);
-    }
-
-    public void FillAndDrawPolygon(Pen pen, Brush brush, Point[] points)
-    {
-        FillPolygon(brush, points);
-        DrawPolygon(pen, points);
-    }
-
-    public void FillAndDrawPolygon(Pen pen, Brush brush, PointF[] points)
-    {
-        FillPolygon(brush, points);
-        DrawPolygon(pen, points);
-    }
-
-    public void FillAndDrawRectangle(Pen pen, Brush brush, float left, float top, float width, float height)
-    {
-        FillRectangle(brush, left, top, width, height);
-        DrawRectangle(pen, left, top, width, height);
-    }
-
-    public void FillEllipse(Brush brush, float left, float top, float width, float height)
-    {
-        var b = PdfUtils.XBrushFromGdiBrush(brush);
-
-        var rc = new XRect(PdfUtils.PixelToPoints(left),
-                           PdfUtils.PixelToPoints(top),
-                           PdfUtils.PixelToPoints(width),
-                           PdfUtils.PixelToPoints(height));
-
-        pdfGfx.DrawEllipse(b, rc);
-    }
-
-    public void FillEllipse(Brush brush, RectangleF rect)
-    {
-        var b = PdfUtils.XBrushFromGdiBrush(brush);
-        var rc =  PdfUtils.XRectFromGdiRect(rect);
-
-        pdfGfx.DrawEllipse(b, rc);
-    }
-
-    public void FillPath(Brush brush, GraphicsPath path)
-    {
-        var b = PdfUtils.XBrushFromGdiBrush(brush);
-        var _path = PdfUtils.XGraphicsPathFromGdiPath(path);
-
-        pdfGfx.DrawPath(b, _path);
-    }
+    public void FillPath(Brush brush, GraphicsPath path) => FillAndDrawPath(null, brush, path);
 
     public void FillPie(Brush brush, float x, float y, float width, float height, float startAngle, float sweepAngle)
     {
-        var b = PdfUtils.XBrushFromGdiBrush(brush);
-        var _x = PdfUtils.PixelToPoints(x);
-        var _y = PdfUtils.PixelToPoints(y);
-        var _w = PdfUtils.PixelToPoints(width);
-        var _h = PdfUtils.PixelToPoints(height);
-
-        pdfGfx.DrawPie(b, _x, _y, _w, _h, startAngle, sweepAngle);
+        using var path = PathConverter.Pie(SKRect.Create(x, y, width, height), startAngle, sweepAngle);
+        DrawShape(path, null, brush);
     }
 
-    public void FillPolygon(Brush brush, PointF[] points)
-    {
-        var b = PdfUtils.XBrushFromGdiBrush(brush);
-        var pts = PdfUtils.XPointArrayFromGdiPointF(points);
+    public void FillPolygon(Brush brush, PointF[] points) => FillAndDrawPolygon(null, brush, points);
 
-        pdfGfx.DrawPolygon(b, pts, XFillMode.Alternate);
-    }
+    public void FillPolygon(Brush brush, Point[] points) => FillAndDrawPolygon(null, brush, points);
 
-    public void FillPolygon(Brush brush, Point[] points)
-    {
-        var b = PdfUtils.XBrushFromGdiBrush(brush);
-        var pts = PdfUtils.XPointArrayFromGdiPoint(points);
+    public void FillRectangle(Brush brush, RectangleF rect) =>
+        FillAndDrawRectangle(null, brush, rect.X, rect.Y, rect.Width, rect.Height);
 
-        pdfGfx.DrawPolygon(b, pts, XFillMode.Alternate);
-    }
-
-    public void FillRectangle(Brush brush, RectangleF rect)
-    {
-        var b = PdfUtils.XBrushFromGdiBrush(brush);
-        var rc = PdfUtils.XRectFromGdiRect(rect);
-
-        pdfGfx.DrawRectangle(b, rc);
-    }
-
-    public void FillRectangle(Brush brush, float left, float top, float width, float height)
-    {
-        FillRectangle(brush, new RectangleF(left, top, width, height));
-    }
+    public void FillRectangle(Brush brush, float left, float top, float width, float height) =>
+        FillAndDrawRectangle(null, brush, left, top, width, height);
 
     public void FillRegion(Brush brush, Region region)
     {
-        var boundingBox = GetRegionBoundingBox(region);
-
-        using var bitmap = new Bitmap(boundingBox.Width, boundingBox.Height);
-        using var gfx = Graphics.FromImage(bitmap);
-
-        gfx.FillRegion(brush, region);
-
-        DrawImage(bitmap, boundingBox);
+        using var path = PathConverter.FromRegion(region);
+        DrawShape(path, null, brush);
     }
 
-    internal static Rectangle GetRegionBoundingBox(Region region)
+    /// <summary>
+    /// Single drawing primitive for every shape: fill first, then outline (GDI+ order).
+    /// </summary>
+    private void DrawShape(SKPath path, Pen? pen, Brush? brush)
     {
-        var rects = region.GetRegionScans(new System.Drawing.Drawing2D.Matrix());
-
-        var left = Convert.ToInt32(rects.Min(r => r.Left));
-        var top = Convert.ToInt32(rects.Min(r => r.Top));
-        var right = Convert.ToInt32(rects.Max(r => r.Right));
-        var bottom = Convert.ToInt32(rects.Max(r => r.Bottom));
-
-        return Rectangle.FromLTRB(left, top, right, bottom);
-    }
-
-    public bool IsVisible(RectangleF rect)
-    {
-        var rc = PdfUtils.XRectFromGdiRect(rect);
-        var page = new XRect(0, 0, pdfGfx.PageSize.Width, pdfGfx.PageSize.Height);
-
-        return page.Contains(rc);
-    }
-
-    public Region[] MeasureCharacterRanges(string text, Font font, RectangleF textRect, StringFormat format)
-    {
-        using var bitmap = new Bitmap(Convert.ToInt32(textRect.Width), Convert.ToInt32(textRect.Height));
-        using var gfx = Graphics.FromImage(bitmap);
-
-        return gfx.MeasureCharacterRanges(text, font, textRect, format);       
-    }
-
-    public SizeF MeasureString(string text, Font font)
-    {
-        var xfont = PdfUtils.XFontFromGdiFont(font);
-        var size = pdfGfx.MeasureString(text, xfont);
-
-        var gdiSize = size.ToSizeF();
-
-        gdiSize.Width = Convert.ToSingle(PdfUtils.PointsToPixel(gdiSize.Width));
-        gdiSize.Height = Convert.ToSingle(PdfUtils.PointsToPixel(gdiSize.Height));
-
-        return gdiSize;
-    }
-
-    public SizeF MeasureString(string text, Font font, SizeF size)
-    {
-        var sz = MeasureString(text, font);
-
-        sz.Width = Math.Min(sz.Width, size.Width);
-        sz.Height = Math.Min(sz.Height, size.Height);
-
-        return sz;
-    }
-
-    public SizeF MeasureString(string text, Font font, int v, StringFormat format)
-    {
-        var xfont = PdfUtils.XFontFromGdiFont(font);
-        var xformat = PdfUtils.XStringFormatFromGdiFormat(format);
-
-        var size = pdfGfx.MeasureString(text, xfont, xformat);
-        var gdiSize = size.ToSizeF();
-
-        gdiSize.Width = Convert.ToSingle(PdfUtils.PointsToPixel(gdiSize.Width));
-        gdiSize.Height = Convert.ToSingle(PdfUtils.PointsToPixel(gdiSize.Height));
-
-        gdiSize.Width = Math.Min(v, gdiSize.Width);
-
-        return gdiSize;
-    }
-
-    public void MeasureString(string text, Font font, SizeF size, StringFormat format, out int charsFit, out int linesFit)
-    {
-        using var bitmap = new Bitmap(Convert.ToInt32(size.Width), Convert.ToInt32(size.Height));
-        using var gfx = Graphics.FromImage(bitmap);
-
-        gfx.MeasureString(text, font, size, format, out charsFit, out linesFit);
-    }
-
-    public SizeF MeasureString(string text, Font font, SizeF layoutArea, StringFormat stringFormat)
-    {          
-        return MeasureString(text, font, layoutArea);
-    }
-
-    public void MultiplyTransform(System.Drawing.Drawing2D.Matrix matrix, MatrixOrder prepend)
-    {
-        var xm = PdfUtils.XMatrixFromGdiMatrix(matrix);
-
-        switch(prepend)
+        if (brush is not null)
         {
-            case MatrixOrder.Append:
-                pdfGfx.MultiplyTransform(xm, XMatrixOrder.Append);
-                break;
-            case MatrixOrder.Prepend:
-                pdfGfx.MultiplyTransform(xm, XMatrixOrder.Prepend);
-                break;
-            default:
-                throw new NotSupportedException("MatrixOrder not supported");
-        }        
+            using var fill = context.PaintFactory.CreateFill(brush);
+            canvas.DrawPath(path, fill);
+        }
+
+        if (pen is not null)
+        {
+            using var stroke = context.PaintFactory.CreateStroke(pen);
+            canvas.DrawPath(path, stroke);
+        }
     }
 
-    public void ResetClip()
-    {       
-        pdfGfx.IntersectClip(new XRect(0, 0, pdfGfx.PageSize.Width, pdfGfx.PageSize.Height));
-    }
+    #endregion
 
-    public void Restore(IGraphicsState state)
+    #region Images
+
+    public void DrawImage(Image image, float x, float y)
     {
-        pdfGfx.Restore(((PdfGraphicsState)state).GetState);
+        var size = GetPhysicalSize(image);
+        DrawImage(image, new RectangleF(x, y, size.Width, size.Height));
     }
 
-    public void RotateTransform(float angle)
-    {       
-        pdfGfx.RotateTransform(angle);    
-    }
+    public void DrawImage(Image image, RectangleF rect) =>
+        DrawImageCore(image, new RectangleF(0, 0, image.Width, image.Height), rect, null);
 
-    public IGraphicsState Save()
+    public void DrawImage(Image image, float x, float y, float width, float height) =>
+        DrawImage(image, new RectangleF(x, y, width, height));
+
+    public void DrawImage(Image image, RectangleF src, RectangleF dst, GraphicsUnit srcUnit) =>
+        DrawImageCore(image, ToSourcePixels(image, src, srcUnit), dst, null);
+
+    public void DrawImage(Image image, Rectangle destRect, int srcX, int srcY, int srcWidth, int srcHeight, GraphicsUnit srcUnit, ImageAttributes imageAttr) =>
+        DrawImageCore(image, ToSourcePixels(image, new RectangleF(srcX, srcY, srcWidth, srcHeight), srcUnit), destRect, imageAttr);
+
+    public void DrawImage(Image image, Rectangle destRect, float srcX, float srcY, float srcWidth, float srcHeight, GraphicsUnit srcUnit, ImageAttributes imageAttrs) =>
+        DrawImageCore(image, ToSourcePixels(image, new RectangleF(srcX, srcY, srcWidth, srcHeight), srcUnit), destRect, imageAttrs);
+
+    /// <summary>
+    /// Draw the image into the parallelogram defined by its upper-left, upper-right and lower-left corners.
+    /// </summary>
+    public void DrawImage(Image image, PointF[] points)
     {
-        return new PdfGraphicsState(pdfGfx.Save());       
+        if (points.Length != 3)
+            throw new ArgumentException("Points array must contain exactly 3 points for parallelogram transformation.", nameof(points));
+
+        var count = canvas.Save();
+        var affine = GetParallelogramMatrix(points, image.Width, image.Height);
+
+        canvas.Concat(in affine);
+        DrawImage(image, new RectangleF(0, 0, image.Width, image.Height));
+
+        canvas.RestoreToCount(count);
     }
 
-    public void ScaleTransform(float scaleX, float scaleY)
-    {       
-        pdfGfx.ScaleTransform(scaleX,
-                              scaleY);          
-    }
-
-    public void SetClip(RectangleF rect)
+    public void DrawImageUnscaled(Image image, Rectangle rect)
     {
-        var rc = new XRect(PdfUtils.PixelToPoints(rect.Left),
-                   PdfUtils.PixelToPoints(rect.Top),
-                   PdfUtils.PixelToPoints(rect.Width),
-                   PdfUtils.PixelToPoints(rect.Height));
+        var count = canvas.Save();
+        canvas.ClipRect(SkiaConvert.ToSKRect(rect));
 
-        pdfGfx.IntersectClip(rc);
+        DrawImage(image, rect.X, rect.Y);
+
+        canvas.RestoreToCount(count);
     }
+
+    /// <summary>
+    /// Maps the image rectangle (0, 0, width, height) onto the destination parallelogram.
+    /// </summary>
+    internal static SKMatrix GetParallelogramMatrix(PointF[] points, float width, float height)
+    {
+        var (p0, p1, p2) = (points[0], points[1], points[2]);
+
+        return new SKMatrix(
+            (p1.X - p0.X) / width, (p2.X - p0.X) / height, p0.X,
+            (p1.Y - p0.Y) / width, (p2.Y - p0.Y) / height, p0.Y,
+            0, 0, 1);
+    }
+
+    private void DrawImageCore(Image image, RectangleF sourcePixels, RectangleF destination, ImageAttributes? attributes)
+    {
+        var dst = SkiaConvert.ToSKRect(destination);
+        using var paint = new SKPaint { IsAntialias = true };
+
+        if (attributes is null)
+        {
+            var skImage = context.ImageConverter.Convert(image);
+            canvas.DrawImage(skImage, SkiaConvert.ToSKRect(sourcePixels), dst, GetSampling(), paint);
+            return;
+        }
+
+        var source = Rectangle.Round(sourcePixels);
+        using var adjusted = context.ImageConverter.ConvertWithAttributes(image, source, attributes);
+        canvas.DrawImage(adjusted, SKRect.Create(adjusted.Width, adjusted.Height), dst, GetSampling(), paint);
+    }
+
+    private SKSamplingOptions GetSampling() =>
+        InterpolationMode is InterpolationMode.NearestNeighbor
+            ? new SKSamplingOptions(SKFilterMode.Nearest)
+            : new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear);
+
+    /// <summary>
+    /// Image size at its own resolution, in 96 DPI pixels (GDI+ DrawImage(x, y) semantics).
+    /// </summary>
+    internal static SizeF GetPhysicalSize(Image image) => new(
+        image.Width * PageUnits.PixelsPerInch / NormalizeResolution(image.HorizontalResolution),
+        image.Height * PageUnits.PixelsPerInch / NormalizeResolution(image.VerticalResolution));
+
+    /// <summary>
+    /// Convert a source rectangle expressed in <paramref name="unit"/> into image pixels.
+    /// </summary>
+    internal static RectangleF ToSourcePixels(Image image, RectangleF rect, GraphicsUnit unit)
+    {
+        var dpiX = NormalizeResolution(image.HorizontalResolution);
+        var dpiY = NormalizeResolution(image.VerticalResolution);
+
+        var (scaleX, scaleY) = unit switch
+        {
+            GraphicsUnit.Point => (dpiX / 72f, dpiY / 72f),
+            GraphicsUnit.Inch => (dpiX, dpiY),
+            GraphicsUnit.Millimeter => (dpiX / 25.4f, dpiY / 25.4f),
+            GraphicsUnit.Document => (dpiX / 300f, dpiY / 300f),
+            GraphicsUnit.Display => (dpiX / PageUnits.PixelsPerInch, dpiY / PageUnits.PixelsPerInch),
+            _ => (1f, 1f)
+        };
+
+        return new RectangleF(rect.X * scaleX, rect.Y * scaleY, rect.Width * scaleX, rect.Height * scaleY);
+    }
+
+    private static float NormalizeResolution(float dpi) => dpi > 0 ? dpi : PageUnits.PixelsPerInch;
+
+    #endregion
+
+    #region Text
+
+    public void DrawString(string text, Font font, Brush brush, float left, float top) =>
+        DrawString(text, font, brush, new RectangleF(left, top, 0, 0), StringFormat.GenericDefault);
+
+    public void DrawString(string text, Font font, Brush brush, float left, float top, StringFormat format) =>
+        DrawString(text, font, brush, new RectangleF(left, top, 0, 0), format);
+
+    public void DrawString(string s, Font font, Brush brush, PointF point, StringFormat format) =>
+        DrawString(s, font, brush, new RectangleF(point.X, point.Y, 0, 0), format);
+
+    public void DrawString(string text, Font font, Brush brush, RectangleF textRect) =>
+        DrawString(text, font, brush, textRect, StringFormat.GenericDefault);
+
+    public void DrawString(string text, Font font, Brush brush, RectangleF textRect, StringFormat format)
+    {
+        if (string.IsNullOrEmpty(text))
+            return;
+
+        format ??= StringFormat.GenericDefault;
+
+        var layout = context.TextLayoutEngine.Layout(text, font, textRect, format);
+        var clip = textRect.Width > 0 && textRect.Height > 0 && !format.FormatFlags.HasFlag(StringFormatFlags.NoClip);
+
+        using var paint = context.PaintFactory.CreateFill(brush);
+        var count = canvas.Save();
+
+        if (clip)
+            canvas.ClipRect(SkiaConvert.ToSKRect(textRect));
+
+        context.TextRenderer.Draw(canvas, layout, font, paint);
+
+        canvas.RestoreToCount(count);
+    }
+
+    public Region[] MeasureCharacterRanges(string text, Font font, RectangleF textRect, StringFormat format) =>
+        context.StringMeasurer.MeasureCharacterRanges(text, font, textRect, format);
+
+    public SizeF MeasureString(string text, Font font) =>
+        context.StringMeasurer.MeasureString(text, font);
+
+    public SizeF MeasureString(string text, Font font, SizeF size) =>
+        context.StringMeasurer.MeasureString(text, font, size);
+
+    public SizeF MeasureString(string text, Font font, int v, StringFormat format) =>
+        context.StringMeasurer.MeasureString(text, font, v, format);
+
+    public void MeasureString(string text, Font font, SizeF size, StringFormat format, out int charsFit, out int linesFit) =>
+        context.StringMeasurer.MeasureString(text, font, size, format, out charsFit, out linesFit);
+
+    public SizeF MeasureString(string text, Font font, SizeF layoutArea, StringFormat stringFormat) =>
+        context.StringMeasurer.MeasureString(text, font, layoutArea, stringFormat);
+
+    #endregion
+
+    #region State, transform and clipping
+
+    public IGraphicsState Save() => new PdfGraphicsState(state.Save());
+
+    public void Restore(IGraphicsState graphicsState)
+    {
+        if (graphicsState is not PdfGraphicsState pdfState)
+            throw new ArgumentException($"State must be created by {nameof(PDFGraphicsAdapter)}.", nameof(graphicsState));
+
+        state.Restore(pdfState.SaveCount);
+    }
+
+    public void MultiplyTransform(Matrix matrix, MatrixOrder prepend) =>
+        state.MultiplyTransform(SkiaConvert.ToSKMatrix(matrix), prepend == MatrixOrder.Prepend);
+
+    public void RotateTransform(float angle) => canvas.RotateDegrees(angle);
+
+    public void ScaleTransform(float scaleX, float scaleY) => canvas.Scale(scaleX, scaleY);
+
+    public void TranslateTransform(float left, float top) => canvas.Translate(left, top);
+
+    public bool IsVisible(RectangleF rect) => !canvas.QuickReject(SkiaConvert.ToSKRect(rect));
+
+    public void ResetClip() => state.ResetClip();
+
+    /// <summary>
+    /// GDI+ <c>SetClip(RectangleF)</c> replaces the current clip.
+    /// </summary>
+    public void SetClip(RectangleF rect) => SetClip(rect, CombineMode.Replace);
 
     public void SetClip(RectangleF rect, CombineMode combineMode)
     {
-        switch (combineMode)
-        {
-            case CombineMode.Replace:
-                ResetClip();
-                SetClip(rect);
-                break;
-            case CombineMode.Intersect:
-                SetClip(rect);
-                break;
-            default:
-                throw new NotSupportedException("Only Intersect / Replace combine mode is supported for clipping");
-        }           
+        using var path = PathConverter.Rectangle(SkiaConvert.ToSKRect(rect));
+        ApplyClip(path, combineMode);
     }
 
     public void SetClip(GraphicsPath path, CombineMode combineMode)
     {
+        using var skPath = PathConverter.FromGraphicsPath(path);
+        ApplyClip(skPath, combineMode);
+    }
+
+    /// <summary>
+    /// Skia clips can only shrink: Replace resets the clip first, Exclude subtracts the path.
+    /// Union / Xor / Complement cannot be expressed and leave the clip unchanged.
+    /// </summary>
+    private void ApplyClip(SKPath path, CombineMode combineMode)
+    {
         switch (combineMode)
         {
             case CombineMode.Replace:
-                SetGraphicsPathClip(path);
-                ResetClip();
+                state.ResetClip();
+                canvas.ClipPath(path, SKClipOperation.Intersect, true);
                 break;
             case CombineMode.Intersect:
-                SetGraphicsPathClip(path);
+                canvas.ClipPath(path, SKClipOperation.Intersect, true);
                 break;
-            default:
-                throw new NotSupportedException("Only Intersect / Replace combine mode is supported for clipping");
-        }    
-    }
-
-    /// <summary>
-    /// Use Gdi GraphicsPath to set clipping region.
-    /// </summary>
-    private void SetGraphicsPathClip(GraphicsPath path)
-    {
-        var xGraphicsPath = PdfUtils.XGraphicsPathFromGdiPath(path);
-
-        pdfGfx.IntersectClip(xGraphicsPath);
-    }
-
-    public void TranslateTransform(float left, float top)
-    {        
-        pdfGfx.TranslateTransform(PdfUtils.PixelToPoints(left),
-                                  PdfUtils.PixelToPoints(top));       
-    }
-
-    /// <summary>
-    /// Resize source rectangle Y coordinate and maxY to align text vertically in the rectangle 
-    /// according to StringFormat.LineAlignment property. 
-    /// 
-    /// This is needed because PdfSharp does not support vertical alignment of text.
-    /// </summary>
-    /// <param name="text"></param>
-    /// <param name="font"></param>
-    /// <param name="format"></param>
-    /// <param name="sourceRect"></param>
-    /// <returns></returns>
-    internal XRect GetVerticallyAlignedRectForText(string text, XFont font, StringFormat format, XRect sourceRect)
-    {           
-        var hasNoWrap = format.FormatFlags.HasFlag(StringFormatFlags.NoWrap);
-
-        var textSize = pdfGfx.MeasureString(text, font);
-        var lineCount = hasNoWrap ? 1 : Math.Ceiling(textSize.Width / sourceRect.Width);
-        var textHeight = Math.Min(textSize.Height * lineCount, sourceRect.Height);
-
-        double verticalOffset = format.LineAlignment switch
-        {
-            StringAlignment.Near => 0.0,
-            StringAlignment.Center => (sourceRect.Height - textHeight) / 2.0,
-            StringAlignment.Far => sourceRect.Height - textHeight,
-            _ => 0.0
-        };
-
-        var newY = sourceRect.Y + verticalOffset;
-        var newHeight = sourceRect.Height - verticalOffset;
-
-        return new(sourceRect.X, newY, sourceRect.Width, newHeight);
-    }
-
-    /// <summary>
-    /// Returns text with added line breaks to fit the text within the specified rectangle maxX.
-    /// </summary>
-    /// <param name="text">Text to prepare</param>
-    /// <param name="font"><c>XFont</c> object used to draw text</param>
-    /// <param name="rect">Destination rectangle</param>
-    /// <returns>Prepared text for <c>DrawString</c> function of PDFSharp</returns>
-    internal string GetTextWrappedToRectWidth(string text, XFont font, XRect rect)
-    {
-        var result = new StringBuilder(text.Length);      
-        var words = text.Split(SpaceChar);
-
-        for (int i = 0; i < words.Length; i++)       
-        {
-            var word = words[i];
-
-            if (IsWordWiderThanRect(word, font, rect.Width))
-                result.Append(SplitWordToFitWidth(word, font, rect.Width));
-            else
-                result.Append(word);
-
-            if (i < words.Length - 1)
-                result.Append(SpaceChar);
+            case CombineMode.Exclude:
+                canvas.ClipPath(path, SKClipOperation.Difference, true);
+                break;
         }
-
-        return result.ToString();
     }
 
-    /// <summary>
-    /// Check if the word is wider than the specified maxX when drawn with the specified font.
-    /// </summary>
-    private bool IsWordWiderThanRect(string word, XFont font, double maxWidth)
-    {
-        return pdfGfx.MeasureString(word, font).Width > maxWidth;
-    }
-
-    /// <summary>
-    /// Split the word into multiple lines by adding line breaks so that each line fits within the 
-    /// specified maxX when drawn with the specified font.
-    /// </summary>
-    private string SplitWordToFitWidth(string word, XFont font, double maxWidth)
-    {
-        var builder = new StringBuilder(word.Length + 1);
-        double currentWidth = 0;
-
-        foreach (var ch in word)
-        {
-            var charWidth = pdfGfx.MeasureString(ch.ToString(), font).Width;
-
-            if (currentWidth + charWidth > maxWidth)
-            {
-                builder.Append(SpaceChar);
-                currentWidth = 0;
-            }
-
-            builder.Append(ch);
-            currentWidth += charWidth;
-        }
-
-        return builder.ToString();
-    }
+    #endregion
 }

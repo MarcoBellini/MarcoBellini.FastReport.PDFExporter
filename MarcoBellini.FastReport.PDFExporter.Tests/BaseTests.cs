@@ -1,4 +1,6 @@
 ﻿
+using System.Drawing;
+
 namespace MarcoBellini.FastReport.PDFExporter.Tests;
 
 public class BaseTests
@@ -17,13 +19,13 @@ public class BaseTests
     [Fact]
     public void TestPixelToPoints()
     {
-        Assert.InRange(PdfUtils.PixelToPoints(10.0), 7.4999, 7.500);
+        Assert.InRange(PageUnits.PixelToPoints(10.0), 7.4999, 7.500);
     }
 
     [Fact]
     public void TestPointsToPixel()
     {
-        Assert.InRange(PdfUtils.PointsToPixel(7.5), 9.9999, 10.000);
+        Assert.InRange(PageUnits.PointsToPixel(7.5), 9.9999, 10.000);
     }
 
     [Theory]
@@ -33,8 +35,8 @@ public class BaseTests
     [InlineData(210.0)]
     public void TestMmToPoints_And_Back(double mm)
     {
-        double points = PdfUtils.MmToPoints(mm);
-        double mmBack = PdfUtils.PointsToMm(points);
+        double points = PageUnits.MmToPoints(mm);
+        double mmBack = PageUnits.PointsToMm(points);
 
         Assert.InRange(mmBack, mm - Tolerance, mm + Tolerance);
     }
@@ -46,8 +48,8 @@ public class BaseTests
     [InlineData(72.0)]
     public void TestPointsToPixel_And_Back(double points)
     {
-        double pixels = PdfUtils.PointsToPixel(points);
-        double pointsBack = PdfUtils.PixelToPoints(pixels);
+        double pixels = PageUnits.PointsToPixel(points);
+        double pointsBack = PageUnits.PixelToPoints(pixels);
 
         Assert.InRange(pointsBack, points - Tolerance, points + Tolerance);
     }
@@ -59,9 +61,19 @@ public class BaseTests
     [InlineData(55.0)]
     public void TestPixelToMm_And_Back(double pixels)
     {
-        double mm = PdfUtils.PixelToMm(pixels);
-        double pixelsBack = PdfUtils.MmToPixel(mm);
+        double mm = PageUnits.PixelToMm(pixels);
+        double pixelsBack = PageUnits.MmToPixel(mm);
 
         Assert.InRange(pixelsBack, pixels - Tolerance, pixels + Tolerance);
+    }
+
+    [Fact]
+    public void TestFontPixelSizeIsIndependentFromFontUnit()
+    {
+        using var pointFont = new Font("Arial", 12, GraphicsUnit.Point);
+        using var pixelFont = new Font("Arial", 16, GraphicsUnit.Pixel);
+
+        Assert.Equal(16f, PageUnits.FontPixelSize(pointFont), 3);
+        Assert.Equal(16f, PageUnits.FontPixelSize(pixelFont), 3);
     }
 }

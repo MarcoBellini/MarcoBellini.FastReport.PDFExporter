@@ -11,9 +11,9 @@
     <Title>MarcoBellini.FastReport.PDFExporter</Title>
     <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <Description>Improved PDF Exporter for FastReport OpenSource using PDFSharp</Description>
+    <Description>Improved PDF Exporter for FastReport OpenSource using SkiaSharp</Description>
     <RepositoryUrl>https://github.com/MarcoBellini/MarcoBellini.FastReport.PDFExporter</RepositoryUrl>
-    <PackageTags>FastReport;PDF;Exporter</PackageTags>
+    <PackageTags>FastReport;PDF;Exporter;SkiaSharp</PackageTags>
     <Authors>MarcoBellini</Authors>
     <Version>2027.1.0</Version>
     <RepositoryType>git</RepositoryType>
@@ -39,7 +39,8 @@
 
   <ItemGroup>
     <PackageReference Include="FastReport.OpenSource" Version="2027.1.0" />
-    <PackageReference Include="PDFsharp-GDI" Version="6.2.4" />
+    <PackageReference Include="SkiaSharp" Version="4.153.1" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Win32" Version="4.153.1" />
     <PackageReference Include="System.Security.Cryptography.Pkcs" Version="8.0.2" />
   </ItemGroup>
 

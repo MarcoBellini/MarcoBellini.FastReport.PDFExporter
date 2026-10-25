@@ -19,3 +19,23 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+--------------------------------------------------------------------------------
+THIRD-PARTY NOTICES
+--------------------------------------------------------------------------------
+
+This software depends on the following third-party components, distributed as
+separate NuGet packages under their own licenses:
+
+* SkiaSharp (https://github.com/mono/SkiaSharp)
+  Copyright (c) 2015-2016 Xamarin, Inc.
+  Copyright (c) 2017-2018 Microsoft Corporation.
+  Licensed under the MIT License.
+
+* Skia (https://skia.org), included in the SkiaSharp native assets
+  Copyright (c) 2011 Google Inc. All rights reserved.
+  Licensed under the BSD 3-Clause License.
+
+* FastReport Open Source (https://github.com/FastReports/FastReport)
+  Copyright (c) Fast Reports Inc.
+  Licensed under the MIT License.

@@ -2,16 +2,18 @@
 using FastReport.Export;
 using FastReport.Table;
 using FastReport.Utils;
-using PdfSharp.Drawing;
-using PdfSharp.Pdf;
+using SkiaSharp;
 using System.Drawing;
 
 namespace MarcoBellini.FastReport.PDFExporter;
 
 public partial class PDFExport : ExportBase
 {
-    private PdfDocument? pdfDocument;
-    private PdfPage? pdfPage;
+    private const string ProducerName = "MarcoBellini.FastReport.PDFExporter (SkiaSharp)";
+
+    private SKDocument? pdfDocument;
+    private MemoryStream? pdfBuffer;
+    private PdfRenderContext? renderContext;
     private PDFGraphicsAdapter? pdfAdapter;
 
     public PDFExport()
@@ -30,12 +32,25 @@ public partial class PDFExport : ExportBase
 
     private void CreatePdfDocument()
     {
-        pdfDocument = new PdfDocument();
+        var metadata = new SKDocumentPdfMetadata
+        {
+            Title = Report.ReportInfo.Name,
+            Author = Report.ReportInfo.Author,
+            Subject = Report.ReportInfo.Description,
+            Creator = "FastReport",
+            Producer = ProducerName,
+            Creation = DateTime.Now,
+            Modified = DateTime.Now,
+            RasterDpi = SKDocument.DefaultRasterDpi,
+            EncodingQuality = SKDocumentPdfMetadata.DefaultEncodingQuality
+        };
 
-        // Use report informations
-        pdfDocument.Info.Title = Report.ReportInfo.Name;
-        pdfDocument.Info.Author = Report.ReportInfo.Author;
-        pdfDocument.Info.Comment = Report.ReportInfo.Description;
+        // The document is buffered so that it can be post-processed (font subsetting) before reaching the export stream.
+        pdfBuffer = new MemoryStream();
+        pdfDocument = SKDocument.CreatePdf(pdfBuffer, metadata)
+            ?? throw new InvalidOperationException("Unable to create the PDF document.");
+
+        renderContext = PdfRenderContext.CreateDefault();
     }
 
     protected override void Dispose(bool disposing)
@@ -48,6 +63,13 @@ public partial class PDFExport : ExportBase
     private void ClosePdfDocument()
     {
         pdfDocument?.Dispose();
+        pdfDocument = null;
+
+        pdfBuffer?.Dispose();
+        pdfBuffer = null;
+
+        renderContext?.Dispose();
+        renderContext = null;
     }
 
     /// <summary>
@@ -68,17 +90,19 @@ public partial class PDFExport : ExportBase
 
     private void CreatePdfPageAndAdapter(ReportPage reportPage)
     {
-        if (pdfDocument is null)
+        if (pdfDocument is null || renderContext is null)
             throw new NullReferenceException($"{nameof(pdfDocument)} is not initialized");
-
-        pdfPage = pdfDocument.AddPage();
 
         var pageSizeMm = GetPageSizeInMm(reportPage);
 
-        pdfPage.Width = XUnit.FromPoint(PdfUtils.MmToPoints(pageSizeMm.Width));
-        pdfPage.Height = XUnit.FromPoint(PdfUtils.MmToPoints(pageSizeMm.Height));
+        var canvas = pdfDocument.BeginPage(
+            (float)PageUnits.MmToPoints(pageSizeMm.Width),
+            (float)PageUnits.MmToPoints(pageSizeMm.Height));
 
-        pdfAdapter = new PDFGraphicsAdapter(XGraphics.FromPdfPage(pdfPage));
+        // Draw in FastReport pixels: the page base matrix converts them to PDF points.
+        canvas.Scale((float)PageUnits.PointsPerPixel);
+
+        pdfAdapter = new PDFGraphicsAdapter(canvas, renderContext);
     }
 
     private void DrawPageBackground(ReportPage reportPage)
@@ -107,8 +131,8 @@ public partial class PDFExport : ExportBase
 
     private void AddPageMarginsToAdapter(ReportPage reportPage)
     {
-        var leftMarginPx = (float)PdfUtils.MmToPixel(reportPage.LeftMargin);
-        var topMarginPx = (float)PdfUtils.MmToPixel(reportPage.TopMargin);
+        var leftMarginPx = (float)PageUnits.MmToPixel(reportPage.LeftMargin);
+        var topMarginPx = (float)PageUnits.MmToPixel(reportPage.TopMargin);
 
         pdfAdapter?.TranslateTransform(leftMarginPx, topMarginPx);
     }
@@ -128,7 +152,7 @@ public partial class PDFExport : ExportBase
         RemoveMarginsFromAdapter(reportPage);
         DrawTopWatermark(reportPage);
 
-        ClosePdfAdapter();
+        ClosePdfPage();
     }
 
     private void DrawPageBorders(ReportPage reportPage)
@@ -151,8 +175,8 @@ public partial class PDFExport : ExportBase
 
     private void RemoveMarginsFromAdapter(ReportPage reportPage)
     {
-        var leftMarginPx = (float)PdfUtils.MmToPixel(reportPage.LeftMargin);
-        var topMarginPx = (float)PdfUtils.MmToPixel(reportPage.TopMargin);
+        var leftMarginPx = (float)PageUnits.MmToPixel(reportPage.LeftMargin);
+        var topMarginPx = (float)PageUnits.MmToPixel(reportPage.TopMargin);
 
         pdfAdapter?.TranslateTransform(-leftMarginPx, -topMarginPx);
     }
@@ -166,9 +190,12 @@ public partial class PDFExport : ExportBase
             AddTextWatermark(reportPage);
     }
 
-    private void ClosePdfAdapter()
+    private void ClosePdfPage()
     {
         pdfAdapter?.Dispose();
+        pdfAdapter = null;
+
+        pdfDocument?.EndPage();
     }
 
     /// <summary>
@@ -218,11 +245,15 @@ public partial class PDFExport : ExportBase
 
     private void SaveAndCloseDocument()
     {
-        if (pdfDocument is null)
+        if (pdfDocument is null || pdfBuffer is null || renderContext is null)
             throw new NullReferenceException($"{nameof(pdfDocument)} is not initialized");
 
-        pdfDocument.Save(Stream);
         pdfDocument.Close();
+
+        var pdf = renderContext.PostProcessor.Process(pdfBuffer.ToArray());
+        Stream.Write(pdf);
+
+        ClosePdfDocument();
     }
 
     /// <summary>
@@ -280,8 +311,8 @@ public partial class PDFExport : ExportBase
         var heightMm = pageSizeMm.Height - reportPage.TopMargin - reportPage.BottomMargin;
 
         return new(
-            (float)PdfUtils.MmToPixel(widthMm),
-            (float)PdfUtils.MmToPixel(heightMm));
+            (float)PageUnits.MmToPixel(widthMm),
+            (float)PageUnits.MmToPixel(heightMm));
     }
 
     /// <summary>
@@ -292,8 +323,8 @@ public partial class PDFExport : ExportBase
         var pageSizeMm = GetPageSizeInMm(reportPage);
 
         return new(
-            (float)PdfUtils.MmToPixel(pageSizeMm.Width),
-            (float)PdfUtils.MmToPixel(pageSizeMm.Height));
+            (float)PageUnits.MmToPixel(pageSizeMm.Width),
+            (float)PageUnits.MmToPixel(pageSizeMm.Height));
     }
 
     /// <summary>
@@ -303,4 +334,3 @@ public partial class PDFExport : ExportBase
         new(ExportUtils.GetPageWidth(reportPage),
             ExportUtils.GetPageHeight(reportPage));
 }
-
