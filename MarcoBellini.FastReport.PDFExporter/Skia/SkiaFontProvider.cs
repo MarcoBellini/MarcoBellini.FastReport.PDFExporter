@@ -4,8 +4,9 @@ using System.Drawing;
 namespace MarcoBellini.FastReport.PDFExporter.Skia;
 
 /// <summary>
-/// Resolves fonts through the platform font manager (<see cref="SKTypeface.FromFamilyName(string, SKFontStyle)"/>).
-/// Skia's PDF backend embeds and subsets the resolved fonts automatically.
+/// Resolves fonts in order: fonts registered with <see cref="PDFExport.AddFontFile(string)"/>,
+/// the platform font manager (<see cref="SKTypeface.FromFamilyName(string, SKFontStyle)"/>), then GDI for legacy family names.
+/// Skia's PDF backend embeds the resolved fonts.
 /// </summary>
 internal sealed class SkiaFontProvider : IFontProvider, IDisposable
 {
@@ -22,7 +23,7 @@ internal sealed class SkiaFontProvider : IFontProvider, IDisposable
         if (fonts.TryGetValue(key, out var cached))
             return cached;
 
-        var skFont = new SKFont(GetTypeface(font.Name, font.Bold, font.Italic), size)
+        var skFont = new SKFont(GetTypeface(font), size)
         {
             Subpixel = true,
             LinearMetrics = true,
@@ -35,19 +36,30 @@ internal sealed class SkiaFontProvider : IFontProvider, IDisposable
         return skFont;
     }
 
-    private SKTypeface GetTypeface(string family, bool bold, bool italic)
+    private SKTypeface GetTypeface(Font font)
     {
-        var key = (family, bold, italic);
+        // Registered typefaces are owned by the registry: not cached here, so Dispose leaves them alone.
+        if (FontRegistry.TryGet(font, out var registered))
+            return registered;
+
+        var key = (font.Name, font.Bold, font.Italic);
 
         if (typefaces.TryGetValue(key, out var cached))
             return cached;
 
         var style = new SKFontStyle(
-            bold ? SKFontStyleWeight.Bold : SKFontStyleWeight.Normal,
+            font.Bold ? SKFontStyleWeight.Bold : SKFontStyleWeight.Normal,
             SKFontStyleWidth.Normal,
-            italic ? SKFontStyleSlant.Italic : SKFontStyleSlant.Upright);
+            font.Italic ? SKFontStyleSlant.Italic : SKFontStyleSlant.Upright);
 
-        var typeface = SKTypeface.FromFamilyName(family, style) ?? SKTypeface.CreateDefault();
+        var typeface = SKTypeface.FromFamilyName(font.Name, style) ?? SKTypeface.CreateDefault();
+
+        // DirectWrite does not know legacy GDI family names ("Arial Narrow") and returns a fallback: ask GDI for the exact file.
+        if (!string.Equals(typeface.FamilyName, font.Name, StringComparison.OrdinalIgnoreCase) && GdiFontLoader.TryLoad(font) is { } gdiTypeface)
+        {
+            typeface.Dispose();
+            typeface = gdiTypeface;
+        }
 
         typefaces.Add(key, typeface);
 

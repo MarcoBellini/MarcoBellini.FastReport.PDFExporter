@@ -21,6 +21,19 @@ public partial class PDFExport : ExportBase
     }
 
     /// <summary>
+    /// Optional. Registers every <c>.ttf</c> / <c>.otf</c> file in <paramref name="path"/> for all exports in the process,
+    /// both for the PDF and for FastReport's layout. Not needed for fonts installed in Windows. Call it once at startup.
+    /// </summary>
+    /// <exception cref="DirectoryNotFoundException">The folder does not exist.</exception>
+    public static void AddFontFolder(string path) => Skia.FontRegistry.AddFolder(path);
+
+    /// <summary>
+    /// Optional. Registers a single <c>.ttf</c> / <c>.otf</c> font file. See <see cref="AddFontFolder(string)"/>.
+    /// </summary>
+    /// <exception cref="FileNotFoundException">The file does not exist.</exception>
+    public static void AddFontFile(string path) => Skia.FontRegistry.AddFile(path);
+
+    /// <summary>
     /// This method is called when the export starts.
     /// </summary>
     protected override void Start()
