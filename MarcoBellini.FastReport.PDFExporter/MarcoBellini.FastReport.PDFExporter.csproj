@@ -15,7 +15,7 @@
     <RepositoryUrl>https://github.com/MarcoBellini/MarcoBellini.FastReport.PDFExporter</RepositoryUrl>
     <PackageTags>FastReport;PDF;Exporter;SkiaSharp</PackageTags>
     <Authors>MarcoBellini</Authors>
-    <Version>2027.1.0</Version>
+    <Version>2027.1.1</Version>
     <RepositoryType>git</RepositoryType>
     <PackageRequireLicenseAcceptance>True</PackageRequireLicenseAcceptance>
     <PackageIcon>logo.png</PackageIcon>

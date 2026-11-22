@@ -39,7 +39,7 @@ What changes for consumers:
   - **gradients** with multiple stops (FastReport linear gradients, including focus/contrast blends)
   - **hatch** and **texture** brushes (approximated path gradients)
   - dashed, custom-dashed and joined strokes
-- System fonts are resolved automatically by name (no font resolver to configure)
+- System fonts are resolved automatically by name (no font resolver to configure), with optional application font folders (see [Fonts](#fonts))
 - Text layout that emulates GDI+ `DrawString` (word wrap, alignment, line limit, trimming, underline / strikeout)
 
 ---
@@ -126,6 +126,43 @@ The report information (`ReportInfo.Name`, `Author`, `Description`) is written t
 
 ---
 
+## Fonts
+
+Fonts installed in Windows work out of the box, with no setup. This includes legacy GDI family names that carry a width or weight, such as **Arial Narrow** or **Segoe UI Semibold**.
+
+Fonts are looked up in this order:
+
+1. Fonts registered with `PDFExport.AddFontFolder` / `PDFExport.AddFontFile` (optional, see below)
+2. Fonts installed in Windows, by family name (DirectWrite)
+3. Fonts installed in Windows, by legacy GDI family name (the same match FastReport uses)
+4. Skia's default font
+
+### Optional: fonts shipped with your application
+
+If your reports use fonts that may not be installed on the target machine, ship them with your application and register them **once at startup**:
+
+```csharp
+using MarcoBellini.FastReport.PDFExporter;
+
+// Program.cs
+PDFExport.AddFontFolder(Path.Combine(AppContext.BaseDirectory, "Fonts")); // every .ttf / .otf in the folder
+// or: PDFExport.AddFontFile(Path.Combine(AppContext.BaseDirectory, "Fonts", "MyFont-Bold.ttf"));
+```
+
+- The call is **optional**. Skip it if your reports only use fonts installed in Windows.
+- Registration applies to the whole process. It also registers the fonts with FastReport (`FastReport.FontManager.AddFont`), so report layout (word wrap, `CanGrow`) matches the PDF.
+- Fonts are matched by the family name shown in the FastReport designer (e.g. `Arial Narrow`). Bold and italic are taken from each file, so register one file per style.
+- A missing folder or file throws `DirectoryNotFoundException` / `FileNotFoundException`. `.ttc` font collections are not supported.
+- Check the font license before you redistribute a font file.
+
+### Windows Server / IIS notes
+
+- Install fonts **for all users**. A font installed "for the current user only" is not visible to the IIS application pool identity.
+- **Arial Narrow is not part of Windows**: it is installed by Microsoft Office. On a server without Office, ship the font (if your license allows it) or use another font.
+- **Windows Server Core** has very few fonts. Windows Server with Desktop Experience has the standard Windows set (Arial, Calibri, Cambria, Consolas, Courier New, Georgia, Segoe UI, Tahoma, Times New Roman, Trebuchet MS, Verdana, ...).
+
+---
+
 ## Platform Support (Windows Only)
 
 This exporter is currently **Windows-only**:
@@ -153,6 +190,7 @@ It can be used in:
 | `Skia/PathConverter`, `Skia/SkiaConvert` | GDI+ geometry, matrices and enums to Skia |
 | `Skia/CanvasStateManager` | GDI+ Save / Restore / Transform / ResetClip semantics |
 | `Skia/SkiaFontProvider`, `Skia/GdiImageConverter` | Cached fonts and images (document scoped) |
+| `Skia/FontRegistry`, `Skia/GdiFontLoader` | Application fonts registered at startup; GDI lookup for legacy family names |
 | `Text/TextLayoutEngine`, `Text/SkiaTextRenderer` | GDI+ compatible text layout and drawing |
 | `Text/GdiStringMeasurer` | GDI+ measurements exposed to FastReport (`MeasureString`, `MeasureCharacterRanges`) |
 | `Pdf/FontSubsetPostProcessor` | TrueType font subsetting of the generated PDF |
