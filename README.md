@@ -158,7 +158,6 @@ PDFExport.AddFontFolder(Path.Combine(AppContext.BaseDirectory, "Fonts")); // eve
 ### Windows Server / IIS notes
 
 - Install fonts **for all users**. A font installed "for the current user only" is not visible to the IIS application pool identity.
-- **Arial Narrow is not part of Windows**: it is installed by Microsoft Office. On a server without Office, ship the font (if your license allows it) or use another font.
 - **Windows Server Core** has very few fonts. Windows Server with Desktop Experience has the standard Windows set (Arial, Calibri, Cambria, Consolas, Courier New, Georgia, Segoe UI, Tahoma, Times New Roman, Trebuchet MS, Verdana, ...).
 
 ---
